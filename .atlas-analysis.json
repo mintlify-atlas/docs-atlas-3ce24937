@@ -1,0 +1,197 @@
+{
+  "projectType": "framework",
+  "projectName": "Applad",
+  "projectDescription": "Config-driven, AI-Native Backend Engine for building and managing complete backend infrastructure.",
+  "theme": "aspen",
+  "primaryColor": "#7C3AED",
+  "lightColor": "#A78BFA",
+  "darkColor": "#5B21B6",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/config-driven",
+              "concepts/agentless-operation",
+              "concepts/environments",
+              "concepts/idempotency"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "config/overview",
+              "config/instance",
+              "config/organizations",
+              "config/projects",
+              "config/environments"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/project-setup",
+              "guides/database-schema",
+              "guides/authentication",
+              "guides/storage",
+              "guides/functions",
+              "guides/deployments",
+              "guides/feature-flags",
+              "guides/messaging",
+              "guides/ai-assistant"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/local",
+              "deployment/vps",
+              "deployment/cloud-adapters",
+              "deployment/docker-compose"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Core Commands",
+            "pages": [
+              "cli/init",
+              "cli/up",
+              "cli/down",
+              "cli/status"
+            ]
+          },
+          {
+            "group": "Infrastructure",
+            "pages": [
+              "cli/deploy",
+              "cli/config",
+              "cli/env"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "cli/tables",
+              "cli/functions",
+              "cli/storage",
+              "cli/flags",
+              "cli/messaging"
+            ]
+          },
+          {
+            "group": "Access & Security",
+            "pages": [
+              "cli/auth",
+              "cli/access",
+              "cli/secrets"
+            ]
+          },
+          {
+            "group": "AI & Automation",
+            "pages": [
+              "cli/instruct",
+              "cli/workflows"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "cli/orgs",
+              "cli/projects",
+              "cli/api"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Packages",
+            "pages": [
+              "api/applad-core",
+              "api/applad-cli",
+              "api/applad-server"
+            ]
+          },
+          {
+            "group": "Client SDKs",
+            "pages": [
+              "api/applad-client",
+              "api/applad-function"
+            ]
+          },
+          {
+            "group": "Configuration Models",
+            "pages": [
+              "api/config/instance-config",
+              "api/config/org-config",
+              "api/config/project-config",
+              "api/config/auth-config",
+              "api/config/database-config",
+              "api/config/storage-config",
+              "api/config/function-config",
+              "api/config/deployment-config"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "YAML-defined infrastructure as code",
+    "Agentless SSH-based operation",
+    "Unified BaaS environment with auto-generated REST/GraphQL APIs",
+    "Declarative access control and permissions",
+    "Environment parity with Docker Compose",
+    "AI-native assistant (The Lad) for infrastructure management",
+    "Multi-environment support (local, VPS, cloud)",
+    "Idempotent reconciliation engine",
+    "Feature flags and gradual rollouts",
+    "Serverless functions and workflows"
+  ],
+  "publicApiSurface": [
+    "applad init",
+    "applad up",
+    "applad down",
+    "applad status",
+    "applad instruct",
+    "applad deploy",
+    "applad functions",
+    "applad tables",
+    "applad auth",
+    "applad access",
+    "applad api",
+    "applad secrets",
+    "applad config",
+    "applad env",
+    "applad flags",
+    "applad messaging",
+    "applad workflows",
+    "applad orgs",
+    "applad projects",
+    "ApplladCore",
+    "ConfigLoader",
+    "ConfigMerger",
+    "InstanceConfig",
+    "OrgConfig",
+    "ProjectConfig",
+    "ApplladClient"
+  ]
+}
