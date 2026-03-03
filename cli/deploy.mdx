@@ -1,0 +1,198 @@
+---
+title: "applad deploy"
+description: "Manage deployment pipelines for web, Android, iOS, desktop apps, and OTA updates"
+---
+
+## Overview
+
+The `applad deploy` command manages all deployment pipelines — web sites to domains, Android apps to the Play Store, iOS apps to the App Store, desktop app distribution, and OTA updates to existing installs. All deployments are defined as yaml files in `deployments/` with a `type` field and a `source` block pointing to the code.
+
+**Important:** Deploy and release are separate concerns. `applad deploy` puts an artifact somewhere (technical, often invisible to users). Feature flags release functionality to users (a business decision). Never conflate the two.
+
+## Commands
+
+### List Deployments
+
+Lists all deployment pipelines defined in the active project's `deployments/` directory across all types.
+
+```bash
+applad deploy list
+```
+
+Filter by deployment type:
+
+```bash
+# Web deployments only
+applad deploy list --type web
+
+# Android / Play Store pipelines
+applad deploy list --type play-store
+
+# iOS / App Store pipelines
+applad deploy list --type app-store
+
+# OTA update pipelines
+applad deploy list --type ota
+```
+
+### Run Deployment
+
+Triggers a deployment pipeline by name. Fetches the source code from the repo or path defined in the deployment's yaml source block, runs the configured build command, and deploys the artifact to its target.
+
+Every deployment is attributed to your SSH key identity in the audit trail.
+
+```bash
+applad deploy run <name>
+```
+
+**Examples:**
+
+```bash
+# Deploy web to configured domain
+applad deploy run web
+
+# Deploy Android to Play Store
+applad deploy run android-production
+
+# Deploy iOS (spins up AWS Mac instance)
+applad deploy run ios-production
+
+# Deploy OTA update
+applad deploy run ota
+
+# Deploy to specific environment
+applad deploy run <name> --env staging
+```
+
+**Deployment Types:**
+
+- **Web:** Fetches source, builds, pushes via Caddy to the configured domain
+- **Play Store:** Fetches source from GitHub, builds AAB, signs, submits to Play Store
+- **App Store:** Spins up an AWS Mac instance, fetches source, builds IPA, signs, submits, tears down instance
+- **OTA:** Pushes update to configured channel with gradual rollout
+
+### View Deployment Logs
+
+Shows the deployment log for a specific pipeline — every run, its build output, its submission result, any errors, and the duration of each step. Streams recent history and can tail live logs for an in-progress deployment.
+
+```bash
+applad deploy logs <name>
+```
+
+### Check Deployment Status
+
+Shows the current status of the most recent deployment for a pipeline — whether it's in progress, succeeded, or failed, and at which step it currently is or stopped.
+
+```bash
+applad deploy status <name>
+```
+
+### Rollback Deployment
+
+Rolls back a deployment to the previous successful version.
+
+```bash
+applad deploy rollback <name>
+```
+
+**Behavior by type:**
+
+- **Web:** Reverts the Caddy config to serve the previous build
+- **Play Store/App Store:** Triggers a rollout of the previously submitted build
+- **OTA:** See [OTA Rollback](#ota-rollback-management) below
+
+### Open Deployment
+
+Opens the deployed artifact in a browser or store page.
+
+```bash
+applad deploy open <name>
+```
+
+**Behavior by type:**
+
+- **Web:** Opens the site URL in browser
+- **Play Store:** Opens the Play Store listing
+- **App Store:** Opens the App Store listing
+
+## Domain Management (Web Deployments)
+
+### List Domains
+
+Lists all custom domains configured across all web deployment pipelines, along with their verification status and SSL certificate status.
+
+```bash
+applad deploy domains list
+```
+
+### Verify Domain
+
+Verifies that a domain's DNS is correctly pointed at the Applad instance. Checks that the A record or CNAME points to the right IP/hostname. Caddy will not serve a domain until DNS is verified.
+
+```bash
+applad deploy domains verify <domain>
+```
+
+### Add Domain
+
+Adds a custom domain to an existing web deployment pipeline. Updates the deployment's yaml file and triggers Caddy to request an SSL certificate for the new domain.
+
+```bash
+applad deploy domains add <name> --domain "newdomain.com"
+```
+
+## OTA Rollout Management
+
+OTA updates roll out gradually to existing installs. These commands let you manage a rollout that's in progress — checking adoption, pausing if something is wrong, resuming when ready, or rolling back if the update causes problems.
+
+### OTA Status
+
+Shows the current state of an OTA rollout — what percentage of devices have received the update, how many are still on the previous version, and the adoption rate over time.
+
+```bash
+applad deploy ota status <name>
+```
+
+### Pause OTA Rollout
+
+Pauses an in-progress gradual rollout. Devices that have already received the update keep it. New devices stop receiving it until the rollout is resumed. Use this if you notice a problem after a rollout has started.
+
+```bash
+applad deploy ota pause <name>
+```
+
+### Resume OTA Rollout
+
+Resumes a paused OTA rollout. Picks up where it left off — continuing to roll out to the next increment of devices.
+
+```bash
+applad deploy ota resume <name>
+```
+
+### OTA Rollback
+
+Forces all devices on the new OTA version back to the previous version. Use this if the OTA update introduced a critical bug and needs to be fully reversed.
+
+```bash
+applad deploy ota rollback <name>
+```
+
+## Preview Environments (Web Deployments)
+
+Preview environments are temporary deployments automatically created for each pull request against the source branch. They let you test and share changes before merging.
+
+### List Preview Environments
+
+Lists all currently active preview environments for a web deployment pipeline — which PR each belongs to, its URL, and when it was created.
+
+```bash
+applad deploy preview list <name>
+```
+
+### Open Preview Environment
+
+Opens the preview environment for a specific pull request number in a browser. The URL follows the pattern configured in the deployment yaml (e.g. `pr-42.preview.myapp.com`).
+
+```bash
+applad deploy preview open <name> --pr 42
+```

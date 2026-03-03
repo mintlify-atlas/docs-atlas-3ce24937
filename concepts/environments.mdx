@@ -1,0 +1,408 @@
+---
+title: Deployment Environments
+description: Understanding local, VPS, and cloud deployment contexts in Applad
+---
+
+Applad is designed to run anywhere you can point it — and to move between those places without changing your application code, your config structure, or your mental model.
+
+## Three Deployment Contexts
+
+There are three deployment contexts, and they form a natural continuum:
+
+<CardGroup cols={3}>
+  <Card title="Local" icon="laptop" color="#3b82f6">
+    Your laptop, home server, or Raspberry Pi. Full production-equivalent stack with Docker Compose.
+  </Card>
+  <Card title="VPS" icon="server" color="#10b981">
+    DigitalOcean, Hetzner, Linode, bare metal. The sweet spot for most teams. Predictable costs, full control.
+  </Card>
+  <Card title="Cloud On-Demand" icon="cloud" color="#f59e0b">
+    AWS, GCP, Azure. Used surgically for specific resources (S3, SES, RDS) or burst compute. Not a platform commitment.
+  </Card>
+</CardGroup>
+
+## Local Development
+
+Your laptop, a home server, a Raspberry Pi. Applad uses Docker Compose locally — the same Docker Compose it uses on VPS targets.
+
+<Info>
+Your local environment is a 1:1 mirror of staging and production. The same containers, the same Dart SDK version, the same OS libraries. No "works on my machine" problems.
+</Info>
+
+### How It Works
+
+```bash
+$ applad up
+```
+
+You only need Docker installed. A developer runs `applad up` and gets a full production-equivalent stack running locally with a single command:
+
+1. Applad reads your config tree
+2. Synthesizes a `docker-compose.yml` for the local environment
+3. Starts services: database, storage, functions, messaging, realtime
+4. Applies any pending migrations
+5. Your API is live at `http://localhost:8080`
+
+<Tabs>
+  <Tab title="Local Config">
+    ```yaml project.yaml
+    environments:
+      - name: "development"
+        url: "http://localhost:8080"
+        infrastructure:
+          type: "local"
+          # Applad synthesizes docker-compose.yml and runs it locally
+          # Same containers as staging and production
+          # No authentication required to run locally
+    ```
+  </Tab>
+  <Tab title="Environment Overrides">
+    ```yaml database/database.yaml
+    environment_overrides:
+      development:
+        primary:
+          adapter: "sqlite"
+          path: "./data/dev.db"
+        analytics:
+          adapter: "sqlite"
+          path: "./data/analytics-dev.db"
+    ```
+
+    Local uses SQLite instead of PostgreSQL. Zero setup required.
+  </Tab>
+</Tabs>
+
+### Local Benefits
+
+- **Onboarding is `applad up`** — any developer on any machine with Docker installed gets a full running stack immediately
+- **No runtime surprises on deploy** — you've been running production containers locally the entire time
+- **Debugging is standard Docker tooling** — `docker logs`, `docker exec`, `docker compose ps`
+- **Works offline** — no cloud dependencies for development
+
+## VPS Deployment
+
+A DigitalOcean Droplet, Hetzner server, Linode, bare metal — any machine you own or rent at a flat rate.
+
+<Check>
+This is the sweet spot for most indie developers, small teams, startups, and anyone who wants full ownership without managing cloud complexity.
+</Check>
+
+You have:
+- Full control over the entire stack
+- Predictable costs (flat monthly rate)
+- No vendor dependency at the infrastructure level
+- Standard SSH access to debug anything
+
+### How It Works
+
+Applad connects over SSH, synthesizes and applies a Docker Compose configuration from your project config, manages everything, and leaves:
+
+```yaml project.yaml
+environments:
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+      docker_host: "unix:///var/run/docker.sock"
+```
+
+<Steps>
+  <Step title="SSH connection opens">
+    Applad connects to `prod-01.acme-corp.com` as user `applad` using the specified SSH key
+  </Step>
+  <Step title="Docker Compose synthesized">
+    A production `docker-compose.yml` is generated from your config tree
+  </Step>
+  <Step title="Services reconciled">
+    Only changed services restart. Applad compares desired state (from config) against running state
+  </Step>
+  <Step title="Connection closes">
+    SSH connection closes. Only Docker containers running your app remain
+  </Step>
+</Steps>
+
+### VPS Sizing
+
+<Note>
+A single mid-range VPS can comfortably run a production Applad instance serving thousands of users.
+</Note>
+
+Recommended starting points:
+
+| Users | VPS Specs | Examples |
+|-------|-----------|----------|
+| < 1,000 | 2 vCPU, 4GB RAM, 80GB SSD | DigitalOcean $24/mo, Hetzner CX21 €5.83/mo |
+| 1,000 - 10,000 | 4 vCPU, 8GB RAM, 160GB SSD | DigitalOcean $48/mo, Hetzner CX31 €9.72/mo |
+| 10,000 - 100,000 | 8 vCPU, 16GB RAM, 320GB SSD | DigitalOcean $96/mo, Hetzner CX41 €17.29/mo |
+
+Scale vertically (bigger VPS) or horizontally (multiple VPS) as needed.
+
+### VPS Providers
+
+Applad works with any VPS provider:
+
+<CardGroup cols={2}>
+  <Card title="DigitalOcean" icon="water">
+    Simple, well-documented, global availability. Droplets start at $4/mo.
+  </Card>
+  <Card title="Hetzner" icon="server">
+    Best price/performance ratio. European data centers. CX11 starts at €4.15/mo.
+  </Card>
+  <Card title="Linode (Akamai)" icon="cloud">
+    Reliable, straightforward pricing. Good global coverage. Starts at $5/mo.
+  </Card>
+  <Card title="Bare Metal / On-Premise" icon="hard-drive">
+    Your own hardware. Maximum control, zero monthly fees. SSH access is all you need.
+  </Card>
+</CardGroup>
+
+## Cloud Providers On-Demand
+
+AWS, GCP, Azure, and others — but used surgically, not as a platform commitment.
+
+<Info>
+Applad treats cloud provider resources as adapters you draw from when they make sense for a specific resource.
+</Info>
+
+You might:
+- Run your core app on a Hetzner VPS (fast and cheap)
+- Use S3 for storage (great pricing model)
+- Use SES for high-volume email at scale
+- Spin up a cloud compute instance for a heavy data processing job
+- Use an AWS Mac instance for iOS builds — paying only for build duration, then tearing it down
+
+### Cloud as Utility, Not Platform
+
+<Tabs>
+  <Tab title="Storage">
+    ```yaml storage/storage.yaml
+    adapter: "s3"
+    config:
+      bucket: ${S3_BUCKET}
+      region: ${S3_REGION}
+
+    environment_overrides:
+      development:
+        adapter: "local"
+        config:
+          path: "./data/storage"
+    ```
+
+    Local filesystem today, S3 tomorrow, R2 next month — application code never changes.
+  </Tab>
+  <Tab title="Database">
+    ```yaml database/database.yaml
+    connections:
+      - id: "primary"
+        adapter: "postgres"
+        url: ${DATABASE_URL}
+
+    environment_overrides:
+      development:
+        primary:
+          adapter: "sqlite"
+          path: "./data/dev.db"
+    ```
+
+    SQLite locally, Postgres on VPS in staging, RDS in production — same config structure, different adapter target.
+  </Tab>
+  <Tab title="Email">
+    ```yaml messaging/messaging.yaml
+    email:
+      provider: "resend"
+      config:
+        api_key: ${RESEND_API_KEY}
+      environment_overrides:
+        production:
+          provider: "ses"
+          config:
+            access_key: ${AWS_SES_ACCESS_KEY}
+            secret_key: ${AWS_SES_SECRET_KEY}
+    ```
+
+    SMTP on VPS for development, SES at scale — one line change in config.
+  </Tab>
+  <Tab title="Compute Burst">
+    ```yaml functions/daily-report.yaml
+    cloud_burst:
+      enabled: true
+      provider: "aws"
+      instance_type: "t3.large"
+      region: "eu-west-1"
+      credentials: "aws-production"
+      max_duration: 3600
+    ```
+
+    iOS builds that require macOS spin up an AWS Mac instance, build, tear down — pay only for build duration.
+  </Tab>
+</Tabs>
+
+### Cloud Adapter Configuration
+
+```yaml project.yaml
+environments:
+  - name: "production"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      # Core app runs on VPS
+
+    # Cloud resources used on-demand alongside the VPS
+    cloud_adapters:
+      - provider: "aws"
+        region: "eu-west-1"
+        credentials: "aws-production"
+        services:
+          - s3
+          - ses
+          - rds
+
+      - provider: "cloudflare"
+        credentials: "cloudflare-prod"
+        services:
+          - r2
+          - workers
+```
+
+Provisioned by `applad up` when first referenced. Torn down explicitly via `applad cloud tear-down <id>`.
+
+## The Continuum
+
+You move along this line as your needs grow, and Applad moves with you:
+
+```
+Local dev (Docker Compose, SQLite)
+  → VPS staging (Docker Compose, Postgres)
+    → VPS production (Docker Compose, Postgres)
+      → VPS + cloud storage adapter (S3/R2)
+        → VPS + cloud database adapter (RDS)
+          → Multi-VPS cluster
+            → Kubernetes on cloud
+```
+
+<Warning>
+Nothing changes about how your application is built or how your config is structured. The only thing that changes is what Applad is pointed at.
+</Warning>
+
+### Migration Example
+
+Starting point (local development):
+
+```yaml
+environments:
+  - name: "development"
+    infrastructure:
+      type: "local"
+```
+
+Add staging on a VPS:
+
+```yaml
+environments:
+  - name: "development"
+    infrastructure:
+      type: "local"
+  - name: "staging"
+    infrastructure:
+      type: "vps"
+      host: "staging.myapp.com"
+```
+
+Add production with cloud storage:
+
+```yaml
+environments:
+  - name: "production"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.myapp.com"
+    cloud_adapters:
+      - provider: "aws"
+        services: [s3, ses]
+```
+
+Application code? **Never changed.** Config structure? **Same as day one.** Just added environment targets.
+
+## Docker Compose Everywhere
+
+One of Applad's most important architectural decisions is that **Docker Compose is the runtime model at every level** — local development, VPS staging, and VPS production.
+
+<Info>
+Local is production, from day one. The same Docker Compose model that runs on your Hetzner VPS runs on your MacBook.
+</Info>
+
+The CLI synthesizes a `docker-compose.yml` from your project config and orchestrates it. You do not need any Dart tooling installed. You do not need to manage SDK versions. You only need Docker.
+
+### Synthesis Example
+
+Your config:
+
+```yaml database/database.yaml
+connections:
+  - id: "primary"
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+```
+
+Applad synthesizes:
+
+```yaml docker-compose.yml
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: applad
+      POSTGRES_USER: applad
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - applad-network
+```
+
+You never write `docker-compose.yml` by hand. Applad generates it from your config.
+
+### Dry-Run and Diff
+
+```bash
+$ applad up --dry-run --diff
+```
+
+Shows the full plan before touching anything:
+- The synthesized Docker Compose
+- Every service that would start or restart
+- Every config change
+- Every migration pending
+
+<Check>
+You review the plan, then run `applad up` to execute it. No surprises, ever.
+</Check>
+
+## Environment Parity by Design
+
+Many tools make local development feel native and light — run a binary, get instant feedback — but then production looks completely different. Containers, different OS libraries, different runtime behavior.
+
+<Warning>
+The gap between local and production is where bugs hide.
+</Warning>
+
+Applad takes the opposite position: **local is production, from day one**.
+
+The practical consequences:
+- **Onboarding is `applad up`** — any developer on any machine with Docker installed gets a full running stack immediately, no environment setup required beyond filling in `.env`
+- **No runtime surprises on deploy** — you've been running production containers locally the entire time
+- **Debugging is standard Docker tooling** — `docker logs`, `docker exec`, `docker compose ps`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Idempotency" icon="rotate" href="/concepts/idempotency">
+    Learn how Applad guarantees running `applad up` twice is the same as once
+  </Card>
+  <Card title="Config-Driven Model" icon="file-code" href="/concepts/config-driven">
+    Understand the YAML config tree and infrastructure-as-code approach
+  </Card>
+</CardGroup>

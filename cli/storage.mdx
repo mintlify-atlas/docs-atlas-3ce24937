@@ -1,0 +1,102 @@
+---
+title: applad storage
+description: Manage files and storage buckets
+---
+
+## Overview
+
+Manages files in the configured storage adapter (local filesystem, S3, R2, GCS, etc.). The adapter is transparent — these commands work identically regardless of which storage backend is configured.
+
+## Commands
+
+### applad storage list
+
+Lists all storage buckets defined in the active project's `storage/` directory, along with their visibility (public or private), size limits, and allowed file types.
+
+```bash
+applad storage list
+```
+
+### applad storage ls
+
+Lists all files in a specific bucket. Shows filename, size, content type, upload date, and owner.
+
+```bash
+applad storage ls <bucket>
+```
+
+**Example:**
+```bash
+applad storage ls avatars
+```
+
+### applad storage upload
+
+Uploads a local file to a bucket. Applies the bucket's configured virus scan, file type validation, and size limit before accepting the file.
+
+```bash
+applad storage upload <bucket> <file>
+```
+
+**Example:**
+```bash
+applad storage upload avatars ./profile.jpg
+```
+
+### applad storage download
+
+Downloads a file from a bucket to the current local directory. Works with both public and private buckets — for private buckets, your SSH key identity is used to authorize the download.
+
+```bash
+applad storage download <bucket> <file>
+```
+
+**Example:**
+```bash
+applad storage download documents invoice-2026-02.pdf
+```
+
+### applad storage delete
+
+Permanently deletes a file from a bucket. Cannot be undone.
+
+```bash
+applad storage delete <bucket> <file>
+```
+
+**Example:**
+```bash
+applad storage delete temp temp-file.zip
+```
+
+### applad storage move
+
+Moves or renames a file within or between buckets. The source file is removed after the copy is confirmed.
+
+```bash
+applad storage move <bucket> <file> <destination>
+```
+
+**Example:**
+```bash
+applad storage move drafts document.pdf published/document.pdf
+```
+
+### applad storage scan
+
+Runs a virus scan on all files currently stored in a bucket. Reports any threats found. By default Applad scans files at upload time — use this to scan existing files retrospectively or to audit a bucket's contents.
+
+```bash
+applad storage scan <bucket>
+```
+
+**Example:**
+```bash
+applad storage scan uploads
+```
+
+## Related Commands
+
+- [applad auth](/cli/auth) - User authentication management
+- [applad config](/cli/config) - Manage configuration including storage adapters
+- [Storage guide](/guides/storage) - Learn how to configure storage buckets and adapters

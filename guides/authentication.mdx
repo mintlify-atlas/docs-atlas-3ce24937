@@ -1,0 +1,401 @@
+---
+title: Authentication
+description: Configure authentication providers, session management, MFA, and multi-tenancy models
+---
+
+## Overview
+
+Applad's authentication system supports multiple providers (email, OAuth, SAML), multi-factor authentication, and three multi-tenancy models — all configured in `auth/auth.yaml`.
+
+## Basic Configuration
+
+```yaml auth/auth.yaml
+session:
+  duration: 86400           # 24 hours
+  refresh: true
+  refresh_duration: 2592000 # 30 days
+  rotate_on_refresh: true
+
+password:
+  min_length: 10
+  require_uppercase: true
+  require_number: true
+  require_symbol: true
+  hashing: "argon2id"
+  argon2id:
+    memory: 65536
+    iterations: 3
+    parallelism: 4
+
+brute_force:
+  enabled: true
+  max_attempts: 5
+  lockout_duration: 900     # 15 minutes
+  progressive: true
+```
+
+## Authentication Providers
+
+### Email Authentication
+
+```yaml auth/auth.yaml
+providers:
+  - type: "email"
+    enabled: true
+    verification_required: true
+    verification_expiry: 86400  # 24 hours
+```
+
+### OAuth Providers
+
+Supported OAuth providers: Google, GitHub, Microsoft, Apple, Facebook, Twitter.
+
+```yaml auth/auth.yaml
+providers:
+  - type: "oauth"
+    name: "google"
+    enabled: true
+    client_id: ${GOOGLE_CLIENT_ID}
+    client_secret: ${GOOGLE_CLIENT_SECRET}
+    scopes: ["email", "profile"]
+    pkce: true
+
+  - type: "oauth"
+    name: "github"
+    enabled: true
+    client_id: ${GITHUB_CLIENT_ID}
+    client_secret: ${GITHUB_CLIENT_SECRET}
+    scopes: ["user:email"]
+    pkce: true
+```
+
+<Steps>
+  <Step title="Create OAuth application">
+    Register your application with the OAuth provider:
+
+    - **Google**: [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+    - **GitHub**: [GitHub Developer Settings](https://github.com/settings/developers)
+  </Step>
+
+  <Step title="Configure redirect URIs">
+    Set the OAuth callback URL to:
+    ```
+    https://your-instance.com/auth/callback/{provider}
+    ```
+  </Step>
+
+  <Step title="Set credentials">
+    ```bash
+    applad secrets set GOOGLE_CLIENT_ID
+    applad secrets set GOOGLE_CLIENT_SECRET
+    ```
+  </Step>
+</Steps>
+
+### SAML Authentication
+
+For enterprise SSO with Okta, Auth0, Azure AD, etc.
+
+```yaml auth/auth.yaml
+providers:
+  - type: "saml"
+    name: "okta"
+    enabled: false
+    metadata_url: ${OKTA_METADATA_URL}
+    signed_requests: true
+```
+
+### Phone Authentication
+
+```yaml auth/auth.yaml
+providers:
+  - type: "phone"
+    enabled: false
+    verification_expiry: 300  # 5 minutes
+```
+
+## Multi-Factor Authentication
+
+```yaml auth/auth.yaml
+mfa:
+  enabled: true
+  required: false  # Set to true to enforce MFA for all users
+  methods:
+    - type: "totp"
+      enabled: true
+    - type: "webauthn"
+      enabled: true
+      relying_party: "myapp.com"
+    - type: "backup_codes"
+      enabled: true
+      count: 10
+```
+
+### MFA Methods
+
+- **TOTP** — Time-based one-time passwords (Google Authenticator, Authy)
+- **WebAuthn** — Hardware security keys (YubiKey, Touch ID, Face ID)
+- **Backup Codes** — Single-use recovery codes
+
+## Multi-Tenancy
+
+Applad supports three multi-tenancy models. Choose one per project:
+
+### Row-Level Isolation
+
+Shared database, shared schema. A `tenant_field` column is added to every table, with row-level filters enforcing isolation.
+
+```yaml auth/auth.yaml
+multi_tenancy:
+  enabled: true
+  model: "row"
+  tenant_field: "org_id"
+```
+
+**Best for:** Most SaaS products — lowest cost, simplest to operate.
+
+### Schema-Level Isolation
+
+Shared database, separate schemas. Each tenant gets their own Postgres schema. Tables are identical in structure but physically isolated.
+
+```yaml auth/auth.yaml
+multi_tenancy:
+  enabled: true
+  model: "schema"
+  schema_pattern: "tenant_{slug}"  # tenant_{id} | tenant_{slug}
+```
+
+**Best for:** Regulated industries requiring stronger isolation.
+
+### Database-Level Isolation
+
+Separate database per tenant. Each tenant gets their own connection. Maximum isolation.
+
+```yaml auth/auth.yaml
+multi_tenancy:
+  enabled: true
+  model: "database"
+  database_url_field: "database_url"  # Field on tenant record
+```
+
+**Best for:** Enterprise with strict data residency or contractual isolation requirements.
+
+## Session Management
+
+```yaml auth/auth.yaml
+session:
+  duration: 86400           # Access token lifetime (24 hours)
+  refresh: true
+  refresh_duration: 2592000 # Refresh token lifetime (30 days)
+  rotate_on_refresh: true   # Issue new refresh token on each use
+
+tokens:
+  access_token_expiry: 900        # 15 minutes
+  refresh_token_expiry: 2592000   # 30 days
+  rotation: true
+  revocation_on_password_change: true
+  revocation_on_suspicious_activity: true
+```
+
+## Managing Users
+
+### List users
+
+```bash
+applad auth users list
+```
+
+### View user details
+
+```bash
+applad auth users get <user-id>
+```
+
+Shows profile, role, MFA status, linked OAuth providers, and recent auth events.
+
+### Delete a user
+
+```bash
+applad auth users delete <user-id>
+```
+
+Soft-deletes the user. They can no longer sign in, but their data is preserved. Active sessions are immediately revoked.
+
+### Ban a user
+
+```bash
+applad auth users ban <user-id>
+```
+
+Immediately revokes all sessions and prevents future sign-in attempts.
+
+### Purge user data (GDPR/CCPA)
+
+```bash
+applad auth users purge <user-id>
+```
+
+Permanently deletes all data associated with a user across all tables, storage, messaging history, analytics, and auth records. Generates a deletion report. Cannot be undone.
+
+### Export user data (GDPR/CCPA)
+
+```bash
+applad auth export --user <user-id>
+```
+
+Generates a complete data export containing all personal data across all tables, storage files, messaging, and auth records. Output is a structured zip archive.
+
+## Session Management
+
+### List active sessions
+
+```bash
+applad auth sessions list
+```
+
+Shows who is signed in, from which device/IP, when the session started, and when it expires.
+
+### Revoke a session
+
+```bash
+applad auth sessions revoke <session-id>
+```
+
+### Revoke all sessions for a user
+
+```bash
+applad auth sessions revoke --user <user-id>
+```
+
+Use this if you suspect an account has been compromised.
+
+## Security Features
+
+### Brute Force Protection
+
+```yaml auth/auth.yaml
+brute_force:
+  enabled: true
+  max_attempts: 5
+  lockout_duration: 900  # 15 minutes
+  progressive: true      # Increase lockout duration on repeated failures
+```
+
+### Password Requirements
+
+```yaml auth/auth.yaml
+password:
+  min_length: 10
+  require_uppercase: true
+  require_number: true
+  require_symbol: true
+  hashing: "argon2id"  # Most secure hashing algorithm
+```
+
+## Environment Variables
+
+Auth configuration requires these environment variables:
+
+```bash .env
+# OAuth — Google
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=  # [SECRET] applad secrets set GOOGLE_CLIENT_SECRET
+
+# OAuth — GitHub
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=  # [SECRET] applad secrets set GITHUB_CLIENT_SECRET
+
+# SAML — Okta (optional)
+OKTA_METADATA_URL=
+```
+
+## Testing Auth Providers
+
+Check that auth providers are configured correctly:
+
+```bash
+applad auth providers list
+```
+
+Shows all providers, whether they're enabled, and any configuration issues.
+
+## Example: Complete Auth Configuration
+
+```yaml auth/auth.yaml
+session:
+  duration: 86400
+  refresh: true
+  refresh_duration: 2592000
+  rotate_on_refresh: true
+
+password:
+  min_length: 10
+  require_uppercase: true
+  require_number: true
+  require_symbol: true
+  hashing: "argon2id"
+
+brute_force:
+  enabled: true
+  max_attempts: 5
+  lockout_duration: 900
+  progressive: true
+
+mfa:
+  enabled: true
+  required: false
+  methods:
+    - type: "totp"
+      enabled: true
+    - type: "webauthn"
+      enabled: true
+      relying_party: "myapp.com"
+    - type: "backup_codes"
+      enabled: true
+      count: 10
+
+providers:
+  - type: "email"
+    enabled: true
+    verification_required: true
+    verification_expiry: 86400
+
+  - type: "oauth"
+    name: "google"
+    enabled: true
+    client_id: ${GOOGLE_CLIENT_ID}
+    client_secret: ${GOOGLE_CLIENT_SECRET}
+    scopes: ["email", "profile"]
+    pkce: true
+
+  - type: "oauth"
+    name: "github"
+    enabled: true
+    client_id: ${GITHUB_CLIENT_ID}
+    client_secret: ${GITHUB_CLIENT_SECRET}
+    scopes: ["user:email"]
+    pkce: true
+
+multi_tenancy:
+  enabled: true
+  model: "row"
+  tenant_field: "org_id"
+
+tokens:
+  access_token_expiry: 900
+  refresh_token_expiry: 2592000
+  rotation: true
+  revocation_on_password_change: true
+  revocation_on_suspicious_activity: true
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Storage" icon="database" href="/guides/storage">
+    Configure file storage with buckets and permissions
+  </Card>
+  <Card title="Functions" icon="code" href="/guides/functions">
+    Create serverless functions for backend logic
+  </Card>
+</CardGroup>

@@ -1,0 +1,120 @@
+---
+title: applad auth
+description: Manage authentication configuration, user records, and sessions
+---
+
+## Overview
+
+The `applad auth` command manages authentication configuration and user/session data. Auth provider config lives in `auth/auth.yaml`. User records, sessions, and auth events live in the runtime database.
+
+## Subcommands
+
+### applad auth providers list
+
+Lists all configured auth providers for the active project — email, OAuth providers (Google, GitHub), SAML, phone, etc. — along with whether each is enabled and any configuration issues detected.
+
+```bash
+applad auth providers list
+```
+
+### applad auth users list
+
+Lists all user records in the active project's runtime database. Supports filtering and pagination. Shows user ID, email, role, creation date, and last sign-in.
+
+```bash
+applad auth users list
+```
+
+### applad auth users get
+
+Shows the full record for a specific user — their profile fields, role, MFA status, linked OAuth providers, and recent auth events.
+
+```bash
+applad auth users get <user-id>
+```
+
+### applad auth users delete
+
+Soft-deletes a user record. The user can no longer sign in but their data is preserved. Their active sessions are immediately revoked. Recorded in the audit trail.
+
+```bash
+applad auth users delete <user-id>
+```
+
+### applad auth users ban
+
+Bans a user, immediately revoking all their sessions and preventing any future sign-in attempts. Differs from delete in that the ban is explicit and reversible through the admin UI.
+
+```bash
+applad auth users ban <user-id>
+```
+
+### applad auth users purge
+
+Permanently and irreversibly deletes all data associated with a user across all tables in the project. Implements the GDPR and CCPA right to erasure. Coordinates deletion across the primary database, storage files owned by the user, messaging history, analytics events, and auth records. Generates a deletion report recorded in the audit trail. Cannot be undone.
+
+```bash
+applad auth users purge <user-id>
+```
+
+### applad auth sessions list
+
+Lists all active sessions across the project — who is signed in, from which device/IP, when the session started, and when it expires.
+
+```bash
+applad auth sessions list
+```
+
+### applad auth sessions revoke
+
+Immediately invalidates a specific session by its ID. The user will be signed out on their next request.
+
+```bash
+applad auth sessions revoke <session-id>
+```
+
+Immediately invalidates all active sessions for a specific user across all devices. Use this if you suspect a user's account has been compromised, or when offboarding a user.
+
+```bash
+applad auth sessions revoke --user <user-id>
+```
+
+### applad auth export
+
+Generates a full data export for a specific user containing all their personal data across all tables, storage files, messaging history, and auth records. Implements the GDPR and CCPA right of data access / subject access request. Output is a structured zip archive.
+
+```bash
+applad auth export --user <user-id>
+```
+
+## Examples
+
+### List all configured auth providers
+
+```bash
+applad auth providers list
+```
+
+### View a specific user's details
+
+```bash
+applad auth users get user_abc123
+```
+
+### Ban a user and revoke all their sessions
+
+```bash
+applad auth users ban user_abc123
+```
+
+### Export user data for GDPR compliance
+
+```bash
+applad auth export --user user_abc123
+```
+
+### Revoke all sessions for a compromised account
+
+```bash
+applad auth sessions revoke --user user_abc123
+```

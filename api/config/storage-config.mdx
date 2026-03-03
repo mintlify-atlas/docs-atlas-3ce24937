@@ -1,0 +1,320 @@
+---
+title: StorageConfig
+description: Storage configuration (storage/*.yaml)
+---
+
+## Overview
+
+`StorageConfig` defines file storage settings, buckets, and upload limits. Configuration is stored in `storage/*.yaml` files.
+
+## Class Definition
+
+```dart
+final class StorageConfig {
+  const StorageConfig({
+    required this.adapter,
+    this.buckets = const [],
+    this.maxFileSizeMb = 50,
+  });
+  
+  factory StorageConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="adapter" type="String" required>
+  Storage adapter: `"local"`, `"s3"`, `"r2"`, `"gcs"`, `"azure"`
+</ParamField>
+
+<ParamField path="buckets" type="List<BucketConfig>" default="[]">
+  List of storage buckets
+</ParamField>
+
+<ParamField path="maxFileSizeMb" type="int" default="50">
+  Maximum file size in megabytes (global default)
+</ParamField>
+
+## BucketConfig
+
+<ParamField path="name" type="String" required>
+  Bucket name/identifier
+</ParamField>
+
+<ParamField path="public" type="bool" default="false">
+  Whether files are publicly accessible
+</ParamField>
+
+<ParamField path="allowedMimeTypes" type="List<String>" default="[]">
+  Allowed MIME types (empty = all types allowed)
+</ParamField>
+
+<ParamField path="maxFileSizeMb" type="int?">
+  Maximum file size for this bucket (overrides global setting)
+</ParamField>
+
+## Usage
+
+### Local Storage (Development)
+
+```yaml
+# storage/storage.yaml
+adapter: local
+max_file_size_mb: 100
+
+buckets:
+  - name: avatars
+    public: true
+    allowed_mime_types:
+      - image/jpeg
+      - image/png
+      - image/webp
+    max_file_size_mb: 5
+  
+  - name: documents
+    public: false
+    allowed_mime_types:
+      - application/pdf
+      - application/msword
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    max_file_size_mb: 25
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = StorageConfig.fromMap(yamlData);
+print('Adapter: ${config.adapter}');
+print('Max file size: ${config.maxFileSizeMb} MB');
+
+for (final bucket in config.buckets) {
+  print('Bucket: ${bucket.name}');
+  print('  Public: ${bucket.public}');
+  print('  Max size: ${bucket.maxFileSizeMb ?? config.maxFileSizeMb} MB');
+  if (bucket.allowedMimeTypes.isNotEmpty) {
+    print('  Allowed types: ${bucket.allowedMimeTypes.join(", ")}');
+  }
+}
+```
+
+### Amazon S3
+
+```yaml
+adapter: s3
+max_file_size_mb: 100
+
+config:
+  region: us-east-1
+  access_key_id: "{{secrets.aws_access_key}}"
+  secret_access_key: "{{secrets.aws_secret_key}}"
+
+buckets:
+  - name: user-uploads
+    public: false
+  
+  - name: public-assets
+    public: true
+```
+
+### Cloudflare R2
+
+```yaml
+adapter: r2
+
+config:
+  account_id: "{{secrets.r2_account_id}}"
+  access_key_id: "{{secrets.r2_access_key}}"
+  secret_access_key: "{{secrets.r2_secret_key}}"
+
+buckets:
+  - name: media
+    public: true
+    allowed_mime_types:
+      - image/*
+      - video/*
+      - audio/*
+```
+
+### Google Cloud Storage
+
+```yaml
+adapter: gcs
+
+config:
+  project_id: my-project
+  credentials: "{{secrets.gcs_credentials}}"
+
+buckets:
+  - name: app-storage
+    public: false
+```
+
+### Azure Blob Storage
+
+```yaml
+adapter: azure
+
+config:
+  account_name: myaccount
+  account_key: "{{secrets.azure_storage_key}}"
+
+buckets:
+  - name: files
+    public: false
+```
+
+### Image Uploads
+
+```yaml
+adapter: local
+
+buckets:
+  - name: avatars
+    public: true
+    allowed_mime_types:
+      - image/jpeg
+      - image/png
+      - image/gif
+      - image/webp
+    max_file_size_mb: 5
+  
+  - name: photos
+    public: true
+    allowed_mime_types:
+      - image/jpeg
+      - image/png
+      - image/webp
+    max_file_size_mb: 10
+```
+
+```dart
+final config = StorageConfig.fromMap(yamlData);
+
+// Find bucket by name
+BucketConfig? findBucket(String name) {
+  return config.buckets.firstWhere(
+    (b) => b.name == name,
+    orElse: () => throw Exception('Bucket not found: $name'),
+  );
+}
+
+final avatarBucket = findBucket('avatars');
+print('Avatar bucket max size: ${avatarBucket.maxFileSizeMb} MB');
+
+// Check if MIME type is allowed
+bool isAllowedMimeType(BucketConfig bucket, String mimeType) {
+  if (bucket.allowedMimeTypes.isEmpty) return true;
+  
+  return bucket.allowedMimeTypes.any((allowed) {
+    if (allowed.endsWith('/*')) {
+      final prefix = allowed.substring(0, allowed.length - 2);
+      return mimeType.startsWith(prefix);
+    }
+    return mimeType == allowed;
+  });
+}
+```
+
+### Document Storage
+
+```yaml
+adapter: s3
+
+buckets:
+  - name: contracts
+    public: false
+    allowed_mime_types:
+      - application/pdf
+    max_file_size_mb: 50
+  
+  - name: invoices
+    public: false
+    allowed_mime_types:
+      - application/pdf
+      - application/vnd.ms-excel
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    max_file_size_mb: 25
+```
+
+### Video Storage
+
+```yaml
+adapter: r2
+max_file_size_mb: 500
+
+buckets:
+  - name: videos
+    public: true
+    allowed_mime_types:
+      - video/mp4
+      - video/webm
+      - video/quicktime
+    max_file_size_mb: 1000  # 1 GB
+```
+
+### Creating Programmatically
+
+```dart
+final config = StorageConfig(
+  adapter: 's3',
+  maxFileSizeMb: 100,
+  buckets: [
+    BucketConfig(
+      name: 'avatars',
+      public: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxFileSizeMb: 5,
+    ),
+    BucketConfig(
+      name: 'documents',
+      public: false,
+      allowedMimeTypes: ['application/pdf'],
+      maxFileSizeMb: 50,
+    ),
+  ],
+);
+
+final json = config.toJson();
+```
+
+## Common MIME Types
+
+### Images
+- `image/jpeg` - JPEG images
+- `image/png` - PNG images
+- `image/gif` - GIF images
+- `image/webp` - WebP images
+- `image/svg+xml` - SVG images
+- `image/*` - All image types
+
+### Documents
+- `application/pdf` - PDF files
+- `application/msword` - Word documents (.doc)
+- `application/vnd.openxmlformats-officedocument.wordprocessingml.document` - Word documents (.docx)
+- `application/vnd.ms-excel` - Excel spreadsheets (.xls)
+- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` - Excel spreadsheets (.xlsx)
+
+### Video
+- `video/mp4` - MP4 videos
+- `video/webm` - WebM videos
+- `video/quicktime` - QuickTime videos (.mov)
+- `video/*` - All video types
+
+### Audio
+- `audio/mpeg` - MP3 audio
+- `audio/wav` - WAV audio
+- `audio/ogg` - OGG audio
+- `audio/*` - All audio types
+
+## Storage Adapters
+
+- **local** - Local filesystem (development)
+- **s3** - Amazon S3
+- **r2** - Cloudflare R2
+- **gcs** - Google Cloud Storage
+- **azure** - Azure Blob Storage
+
+## Source Location
+
+`packages/applad_core/lib/src/config/storage_config.dart:4`

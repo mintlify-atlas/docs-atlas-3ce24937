@@ -1,0 +1,312 @@
+---
+title: "Installation"
+description: "Install the Applad CLI on macOS, Linux, or WSL"
+---
+
+## Quick Install
+
+The fastest way to install Applad is via the official install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mittolabs/applad/main/scripts/install.sh | bash
+```
+
+This script will:
+- Download the latest Applad CLI binary for your platform
+- Install it to `/usr/local/bin/applad`
+- Verify the installation
+- Set up shell completions (optional)
+
+<Note>
+The install script supports **macOS**, **Linux**, and **WSL (Windows Subsystem for Linux)**.
+</Note>
+
+## Prerequisites
+
+Before installing Applad, ensure you have the following installed:
+
+<Steps>
+  <Step title="Docker">
+    Applad uses Docker Compose as the universal runtime model. You need Docker installed on your system.
+    
+    **macOS:**
+    ```bash
+    # Install Docker Desktop
+    brew install --cask docker
+    ```
+    
+    **Linux:**
+    ```bash
+    # Install Docker Engine
+    curl -fsSL https://get.docker.com | sh
+    
+    # Add your user to the docker group
+    sudo usermod -aG docker $USER
+    ```
+    
+    **WSL:**
+    Install Docker Desktop for Windows with WSL 2 backend enabled.
+  </Step>
+  <Step title="SSH Access (for remote deployments)">
+    For VPS deployments, you'll need SSH key-based authentication configured. Applad uses SSH keys as identity for all operations.
+    
+    ```bash
+    # Generate an SSH key if you don't have one
+    ssh-keygen -t ed25519 -C "your_email@example.com"
+    ```
+  </Step>
+</Steps>
+
+## Platform Requirements
+
+| Platform | Architecture | Minimum Version |
+|----------|-------------|-----------------|
+| macOS    | x86_64, ARM64 | macOS 11+ |
+| Linux    | x86_64, ARM64 | Kernel 3.10+ |
+| WSL      | WSL 2 | Windows 10 1903+ |
+
+<Warning>
+**Windows native is not currently supported.** Use WSL 2 for Windows development.
+</Warning>
+
+## Alternative Installation Methods
+
+### Manual Installation
+
+If you prefer to install manually or the script doesn't work for your system:
+
+<Steps>
+  <Step title="Download the binary">
+    Download the latest release for your platform from the [GitHub releases page](https://github.com/mittolabs/applad/releases).
+    
+    **macOS (Apple Silicon):**
+    ```bash
+    curl -LO https://github.com/mittolabs/applad/releases/latest/download/applad-darwin-arm64
+    ```
+    
+    **macOS (Intel):**
+    ```bash
+    curl -LO https://github.com/mittolabs/applad/releases/latest/download/applad-darwin-x64
+    ```
+    
+    **Linux (x86_64):**
+    ```bash
+    curl -LO https://github.com/mittolabs/applad/releases/latest/download/applad-linux-x64
+    ```
+  </Step>
+  <Step title="Make it executable">
+    ```bash
+    chmod +x applad-*
+    ```
+  </Step>
+  <Step title="Move to PATH">
+    ```bash
+    sudo mv applad-* /usr/local/bin/applad
+    ```
+  </Step>
+</Steps>
+
+### Build from Source
+
+For developers and contributors wanting to build from source:
+
+<CodeGroup>
+
+```bash Local Build
+# Clone the repository
+git clone https://github.com/mittolabs/applad.git
+cd applad
+
+# Bootstrap with Melos
+dart pub global activate melos
+melos bootstrap
+
+# Build locally
+./scripts/build_local.sh
+```
+
+```bash Development Setup
+# Install Dart SDK (if not already installed)
+brew install dart  # macOS
+# or follow https://dart.dev/get-dart for other platforms
+
+# Bootstrap the monorepo
+dart pub global activate melos
+melos bootstrap
+
+# Run tests
+melos run test
+
+# Build CLI binary
+cd packages/applad_cli
+dart compile exe bin/applad.dart -o applad
+```
+
+</CodeGroup>
+
+## Verify Installation
+
+After installation, verify that Applad is correctly installed:
+
+```bash
+applad --version
+```
+
+You should see output similar to:
+
+```
+applad version 0.1.0
+```
+
+Check that Docker is accessible:
+
+```bash
+docker --version
+docker compose version
+```
+
+## Shell Completion (Optional)
+
+Enable shell completion for a better CLI experience:
+
+<CodeGroup>
+
+```bash Bash
+# Add to ~/.bashrc or ~/.bash_profile
+echo 'eval "$(applad completion bash)"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+```bash Zsh
+# Add to ~/.zshrc
+echo 'eval "$(applad completion zsh)"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+```bash Fish
+# Add to ~/.config/fish/config.fish
+applad completion fish | source
+```
+
+</CodeGroup>
+
+## Update Applad
+
+To update Applad to the latest version, re-run the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mittolabs/applad/main/scripts/install.sh | bash
+```
+
+Or manually download and replace the binary as described in the manual installation steps.
+
+## Uninstall
+
+To remove Applad from your system:
+
+```bash
+applad uninstall
+```
+
+This command will:
+- Remove the Applad CLI binary
+- Clean up configuration files (with confirmation)
+- Remove shell completions
+
+Alternatively, manually remove the binary:
+
+```bash
+sudo rm /usr/local/bin/applad
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Permission denied when running install script">
+    The install script requires write access to `/usr/local/bin`. You may need to run with sudo:
+    
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/mittolabs/applad/main/scripts/install.sh | sudo bash
+    ```
+  </Accordion>
+  
+  <Accordion title="Docker not found">
+    Ensure Docker is installed and running. Test with:
+    
+    ```bash
+    docker ps
+    ```
+    
+    If you see "Cannot connect to the Docker daemon", start Docker Desktop (macOS) or the Docker service (Linux):
+    
+    ```bash
+    # Linux
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    ```
+  </Accordion>
+  
+  <Accordion title="Command not found after installation">
+    The binary may not be in your PATH. Verify the installation location:
+    
+    ```bash
+    which applad
+    ```
+    
+    If nothing is returned, add `/usr/local/bin` to your PATH:
+    
+    ```bash
+    echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+  </Accordion>
+  
+  <Accordion title="macOS Gatekeeper warning">
+    On macOS, you might see a security warning for the downloaded binary. To allow it:
+    
+    1. Go to **System Preferences** > **Security & Privacy**
+    2. Click **Allow Anyway** next to the Applad message
+    3. Re-run the `applad` command
+    
+    Alternatively, remove the quarantine attribute:
+    
+    ```bash
+    sudo xattr -r -d com.apple.quarantine /usr/local/bin/applad
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have Applad installed:
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get a live backend running in 3 minutes
+  </Card>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli/overview"
+  >
+    Explore all available commands
+  </Card>
+  <Card
+    title="Configuration"
+    icon="gear"
+    href="/concepts/configuration"
+  >
+    Learn about Applad's config structure
+  </Card>
+  <Card
+    title="Deploy to VPS"
+    icon="server"
+    href="/deployment/vps"
+  >
+    Deploy your first project to a VPS
+  </Card>
+</CardGroup>

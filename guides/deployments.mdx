@@ -1,0 +1,430 @@
+---
+title: Deployment Pipelines
+description: Configure automated deployments for web, Android, iOS, desktop apps, and OTA updates
+---
+
+## Overview
+
+Applad manages all deployment pipelines through YAML files in `deployments/`. Each deployment type (web, Play Store, App Store, OTA) is defined in a single file with a source block pointing to your code.
+
+<Info>
+**Deploy ≠ Release**
+
+Deploy is the technical act of putting an artifact somewhere. Release is the business decision to make functionality live to users, controlled through [feature flags](/guides/feature-flags). These are separate concerns managed by separate people at separate times.
+</Info>
+
+## Web Deployments
+
+### Basic Web Deployment
+
+```yaml deployments/web.yaml
+name: "web"
+type: "web"
+
+domain: "myapp.com"
+www_redirect: true
+ssl: true
+
+source:
+  type: "github"
+  repo: "myorg/myapp-web"
+  branch: "main"
+  build_command: "flutter build web"
+  output_dir: "build/web"
+  ssh_key: "ci-github-actions"
+
+headers:
+  - path: "/*"
+    values:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+      X-XSS-Protection: "1; mode=block"
+      Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      Content-Security-Policy: "default-src 'self'; script-src 'self'"
+      Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+
+redirects:
+  - from: "/old-path"
+    to: "/new-path"
+    status: 301
+
+triggers:
+  - type: "git_push"
+    branch: "main"
+  - type: "manual"
+```
+
+### Preview Environments
+
+Automatically create deployments for each pull request:
+
+```yaml deployments/web.yaml
+preview_environments:
+  enabled: true
+  pattern: "pr-{number}.preview.myapp.com"
+  ssl: true
+```
+
+Manage preview environments:
+
+```bash
+# List active previews
+applad deploy preview list web
+
+# Open preview for PR #42
+applad deploy preview open web --pr 42
+```
+
+## Android Deployments
+
+### Play Store Deployment
+
+```yaml deployments/android-production.yaml
+name: "android-production"
+type: "play-store"
+
+track: "production"  # internal | alpha | beta | production
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  ssh_key: "ci-github-actions"
+
+build:
+  command: "flutter build appbundle --release"
+  output: "build/app/outputs/bundle/release/app-release.aab"
+  infrastructure:
+    type: "vps"
+    host: "build.acme-corp.com"
+    ssh_key: "ci-github-actions"
+
+signing:
+  keystore: "android-keystore"  # Reference to credential in admin database
+  key_alias: "release"
+
+store_metadata:
+  package_name: "com.acme.myapp"
+  release_notes: "auto"  # Generate from git commits or specify manually
+
+triggers:
+  - type: "git_tag"
+    pattern: "v*"
+  - type: "manual"
+```
+
+<Steps>
+  <Step title="Configure signing credentials">
+    Store your keystore securely:
+
+    ```bash
+    applad secrets set android-keystore
+    ```
+  </Step>
+
+  <Step title="Trigger deployment">
+    ```bash
+    applad deploy run android-production
+    ```
+
+    Or tag a release:
+
+    ```bash
+    git tag v1.0.0
+    git push --tags
+    ```
+  </Step>
+
+  <Step title="Monitor deployment">
+    ```bash
+    applad deploy logs android-production
+    applad deploy status android-production
+    ```
+  </Step>
+</Steps>
+
+## iOS Deployments
+
+### App Store Deployment
+
+```yaml deployments/ios-production.yaml
+name: "ios-production"
+type: "app-store"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  ssh_key: "ci-github-actions"
+
+build:
+  command: "flutter build ipa --release"
+  output: "build/ios/ipa"
+  infrastructure:
+    type: "cloud"
+    provider: "aws"
+    instance_type: "mac2.metal"  # macOS required for iOS builds
+    region: "us-east-1"
+    credentials: "aws-production"
+    teardown_after: true  # Tear down instance after build
+
+signing:
+  certificate: "ios-distribution"  # Reference to credential in admin database
+  profile: "ios-appstore-profile"
+
+store_metadata:
+  bundle_id: "com.acme.myapp"
+  release_notes: "auto"
+
+triggers:
+  - type: "git_tag"
+    pattern: "v*"
+  - type: "manual"
+```
+
+<Info>
+iOS builds require macOS. Applad automatically provisions an AWS Mac instance, builds the app, and tears down the instance after completion. The instance appears in `applad cloud list` while the build is in progress.
+</Info>
+
+## OTA Updates
+
+Over-the-air updates let you push changes to existing app installs without going through app stores.
+
+```yaml deployments/ota.yaml
+name: "ota"
+type: "ota"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  ssh_key: "ci-github-actions"
+
+rollout:
+  strategy: "gradual"  # instant | gradual
+  percentage: 10       # Start at 10% of users
+  increment: 10        # Increase by 10% each interval
+  interval: "24h"      # Wait 24h between increments
+
+triggers:
+  - type: "manual"
+```
+
+### Managing OTA Rollouts
+
+<Steps>
+  <Step title="Start rollout">
+    ```bash
+    applad deploy run ota
+    ```
+  </Step>
+
+  <Step title="Monitor adoption">
+    ```bash
+    applad deploy ota status ota
+    ```
+
+    Shows percentage of devices that have received the update.
+  </Step>
+
+  <Step title="Pause if issues detected">
+    ```bash
+    applad deploy ota pause ota
+    ```
+  </Step>
+
+  <Step title="Resume when ready">
+    ```bash
+    applad deploy ota resume ota
+    ```
+  </Step>
+
+  <Step title="Rollback if critical bug">
+    ```bash
+    applad deploy ota rollback ota
+    ```
+
+    Forces all devices back to the previous version.
+  </Step>
+</Steps>
+
+## Deployment Triggers
+
+Control when deployments run:
+
+### Git Push Trigger
+
+```yaml
+triggers:
+  - type: "git_push"
+    branch: "main"
+```
+
+### Git Tag Trigger
+
+```yaml
+triggers:
+  - type: "git_tag"
+    pattern: "v*"  # Matches v1.0.0, v2.1.3, etc.
+```
+
+### Manual Trigger
+
+```yaml
+triggers:
+  - type: "manual"
+```
+
+Run with:
+
+```bash
+applad deploy run <name>
+```
+
+## Deployment Commands
+
+### List deployments
+
+```bash
+# All deployments
+applad deploy list
+
+# Filter by type
+applad deploy list --type web
+applad deploy list --type play-store
+applad deploy list --type app-store
+applad deploy list --type ota
+```
+
+### Trigger deployment
+
+```bash
+applad deploy run web
+applad deploy run android-production
+applad deploy run ios-production
+applad deploy run ota
+```
+
+### View logs
+
+```bash
+applad deploy logs <name>
+```
+
+Streams build output, submission results, and errors.
+
+### Check status
+
+```bash
+applad deploy status <name>
+```
+
+Shows whether the deployment is in progress, succeeded, or failed.
+
+### Rollback
+
+```bash
+applad deploy rollback <name>
+```
+
+For web deployments: reverts to previous build. For mobile: triggers rollout of previous submitted build.
+
+### Open deployed artifact
+
+```bash
+applad deploy open <name>
+```
+
+Opens the site URL or store listing in your browser.
+
+## Domain Management
+
+### List domains
+
+```bash
+applad deploy domains list
+```
+
+Shows all custom domains with verification and SSL status.
+
+### Verify domain DNS
+
+```bash
+applad deploy domains verify myapp.com
+```
+
+Checks that DNS is correctly pointed at your Applad instance.
+
+### Add custom domain
+
+```bash
+applad deploy domains add web --domain "newdomain.com"
+```
+
+Updates the deployment YAML and triggers SSL certificate request.
+
+## Environment-Specific Deployments
+
+Deploy to specific environments:
+
+```bash
+applad deploy run web --env staging
+applad deploy run web --env production
+```
+
+## Example: Complete CI/CD Pipeline
+
+```yaml .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to production
+        run: |
+          applad deploy run web --env production
+        env:
+          SSH_KEY: ${{ secrets.APPLAD_SSH_KEY }}
+
+  deploy-android:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to Play Store
+        run: |
+          applad deploy run android-production
+        env:
+          SSH_KEY: ${{ secrets.APPLAD_SSH_KEY }}
+
+  deploy-ios:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to App Store
+        run: |
+          applad deploy run ios-production
+        env:
+          SSH_KEY: ${{ secrets.APPLAD_SSH_KEY }}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Feature Flags" icon="flag" href="/guides/feature-flags">
+    Control feature releases independently from deployments
+  </Card>
+  <Card title="Messaging" icon="envelope" href="/guides/messaging">
+    Configure email, SMS, and push notifications
+  </Card>
+</CardGroup>

@@ -1,0 +1,192 @@
+---
+title: applad_cli
+description: Command-line interface library for Applad platform management
+---
+
+## Overview
+
+The `applad_cli` package provides the command-line interface for managing Applad projects, deployments, and infrastructure. It includes the command runner and utilities used by the `applad` CLI tool.
+
+## Installation
+
+The CLI is typically installed globally:
+
+```bash
+dart pub global activate applad_cli
+```
+
+Or run directly:
+
+```bash
+dart pub global run applad_cli:applad <command>
+```
+
+## Main Exports
+
+### ApplAdCommandRunner
+
+The main command runner that orchestrates all CLI commands:
+
+```dart
+import 'package:applad_cli/applad_cli.dart';
+
+void main(List<String> arguments) async {
+  final runner = ApplAdCommandRunner();
+  await runner.run(arguments);
+}
+```
+
+### Output Utilities
+
+Formatted console output helpers:
+
+```dart
+import 'package:applad_cli/applad_cli.dart';
+
+// Print success message
+Output.success('Deployment complete!');
+
+// Print error message
+Output.error('Failed to connect to server');
+
+// Print info message
+Output.info('Building project...');
+
+// Print warning
+Output.warning('Missing configuration file');
+```
+
+### Config Finder
+
+Locate configuration files in the project hierarchy:
+
+```dart
+import 'package:applad_cli/applad_cli.dart';
+
+final finder = ConfigFinder();
+
+// Find applad.yaml
+final instanceConfig = await finder.findInstanceConfig();
+
+// Find project.yaml
+final projectConfig = await finder.findProjectConfig();
+
+// Find org.yaml
+final orgConfig = await finder.findOrgConfig();
+```
+
+### Version Info
+
+Get CLI version information:
+
+```dart
+import 'package:applad_cli/applad_cli.dart';
+
+final version = getVersion();
+print('Applad CLI v$version');
+```
+
+## Available Commands
+
+The CLI provides the following commands:
+
+### Project Management
+
+- `applad init` - Initialize a new Applad project
+- `applad status` - Show project status and health
+- `applad config` - Manage configuration files
+
+### Development
+
+- `applad up` - Start local development server
+- `applad down` - Stop local development server
+
+### Database
+
+- `applad db` - Database management commands
+- `applad tables` - List and manage tables
+
+### Authentication
+
+- `applad auth login` - Sign in to Applad account
+- `applad auth logout` - Sign out
+- `applad auth whoami` - Show current user
+
+### Functions
+
+- `applad functions` - Manage serverless functions
+- `applad functions deploy` - Deploy functions
+- `applad functions logs` - View function logs
+
+### Storage
+
+- `applad storage` - Manage storage buckets
+- `applad storage upload` - Upload files
+- `applad storage download` - Download files
+
+### Deployments
+
+- `applad deploy` - Deploy to production
+- `applad orgs` - Manage organizations
+- `applad projects` - Manage projects
+
+### Other Services
+
+- `applad messaging` - Real-time messaging setup
+- `applad workflows` - Workflow automation
+- `applad flags` - Feature flags management
+- `applad secrets` - Secret management
+- `applad env` - Environment variables
+- `applad access` - Access control and permissions
+- `applad api` - API explorer and testing
+
+### Utilities
+
+- `applad version` - Show CLI version
+- `applad uninstall` - Uninstall Applad
+- `applad workspace` - Workspace management
+- `applad instruct` - AI-powered assistance
+
+## Building Custom Commands
+
+You can extend the CLI with custom commands:
+
+```dart
+import 'package:applad_cli/applad_cli.dart';
+import 'package:args/command_runner.dart';
+
+class MyCustomCommand extends Command {
+  @override
+  String get name => 'custom';
+
+  @override
+  String get description => 'My custom command';
+
+  @override
+  Future<void> run() async {
+    Output.info('Running custom command...');
+    // Your logic here
+  }
+}
+
+void main(List<String> args) async {
+  final runner = ApplAdCommandRunner()
+    ..addCommand(MyCustomCommand());
+  await runner.run(args);
+}
+```
+
+## Configuration
+
+The CLI reads configuration from:
+
+1. `applad.yaml` - Instance configuration
+2. `org.yaml` - Organization settings
+3. `project.yaml` - Project settings
+4. `~/.applad/config.yaml` - User preferences
+
+## Source Location
+
+- Main library: `packages/applad_cli/lib/applad_cli.dart`
+- CLI entry point: `packages/applad_cli/bin/applad.dart`
+- Commands: `packages/applad_cli/lib/src/commands/`

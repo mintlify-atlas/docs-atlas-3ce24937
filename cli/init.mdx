@@ -1,0 +1,65 @@
+---
+title: applad init
+description: Initialize a new Applad project with configuration files and directory structure
+---
+
+## Overview
+
+Creates the initial Applad project structure in the current directory. This command generates `applad.yaml`, the `orgs/` directory tree, a `.gitignore` that excludes all `.env` files, and an initial `.env.example` at the instance level. Run this once when starting a new Applad project.
+
+## Usage
+
+```bash
+applad init [--template <name>]
+```
+
+## Options
+
+<ParamField path="--template" type="string" default="minimal">
+  Start from a pre-built scaffold instead of a blank slate. Available templates:
+  - `saas` - Includes auth, multi-tenancy, billing tables, and common messaging templates
+  - `api` - A leaner REST-only setup
+  - `cms` - Adds content tables and hosting config
+  - `minimal` - The absolute bare minimum to get started
+</ParamField>
+
+## Examples
+
+### Initialize with default minimal template
+
+```bash
+applad init
+```
+
+Creates a minimal Applad project structure in the current directory.
+
+### Initialize with SaaS template
+
+```bash
+applad init --template saas
+```
+
+Creates a full-featured SaaS project with authentication, multi-tenancy, billing, and messaging templates.
+
+### Initialize with API template
+
+```bash
+applad init --template api
+```
+
+Creates a lean REST API project structure.
+
+### Initialize with CMS template
+
+```bash
+applad init --template cms
+```
+
+Creates a project with content management tables and hosting configuration.
+
+## What Gets Created
+
+- `applad.yaml` - Main configuration file
+- `orgs/` - Organization directory tree
+- `.gitignore` - Configured to exclude `.env` files
+- `.env.example` - Template for environment variables

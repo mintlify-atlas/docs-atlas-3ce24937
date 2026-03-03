@@ -1,0 +1,157 @@
+---
+title: applad_core
+description: Core package with configuration models, merge engine, and domain types for Applad
+---
+
+## Overview
+
+The `applad_core` package provides the foundational configuration models and utilities used across the Applad platform. This package includes:
+
+- **Config Models**: YAML-based configuration classes for all Applad services
+- **Merge Engine**: Smart configuration merging across hierarchy levels
+- **Domain Models**: Shared types like environments, secrets, and audit entries
+- **Utilities**: Environment parsing and variable extraction
+
+## Installation
+
+```yaml
+dependencies:
+  applad_core: ^1.0.0
+```
+
+## Main Exports
+
+### Configuration Models
+
+The core package exports configuration classes that map to YAML files:
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+// Load and use configuration
+final instanceConfig = InstanceConfig.fromMap(yamlData);
+final projectConfig = ProjectConfig.fromMap(projectYaml);
+final authConfig = AuthConfig.fromMap(authYaml);
+```
+
+#### Available Config Classes
+
+- `InstanceConfig` - Root-level instance configuration (`applad.yaml`)
+- `OrgConfig` - Organization-level settings (`org.yaml`)
+- `ProjectConfig` - Project-level configuration (`project.yaml`)
+- `AuthConfig` - Authentication providers and settings
+- `DatabaseConfig` - Database connections and migrations
+- `TableConfig` - Database table schemas and policies
+- `StorageConfig` - File storage buckets and settings
+- `FunctionConfig` - Serverless function definitions
+- `WorkflowConfig` - Workflow automation rules
+- `MessagingConfig` - Real-time messaging configuration
+- `FlagConfig` - Feature flag definitions
+- `DeploymentConfig` - Deployment platform settings
+- `RealtimeConfig` - WebSocket and real-time features
+- `AnalyticsConfig` - Analytics and tracking setup
+- `ObservabilityConfig` - Logging and monitoring
+- `SecurityConfig` - Security policies and rules
+
+### Merge Engine
+
+The configuration merge engine allows you to layer configurations across instance, org, and project levels:
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+// Load configurations from multiple levels
+final loader = ConfigLoader();
+final instanceConfig = await loader.loadInstance();
+final orgConfig = await loader.loadOrg('my-org');
+final projectConfig = await loader.loadProject('my-project');
+
+// Merge them together
+final merger = ConfigMerger();
+final merged = merger.merge(
+  instance: instanceConfig,
+  org: orgConfig,
+  project: projectConfig,
+);
+
+// Validate the result
+final validator = ConfigValidator();
+final errors = validator.validate(merged);
+```
+
+### Domain Models
+
+Shared domain types used across Applad:
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+// Environment enumeration
+final env = Environment.production;
+final envName = Environment.fromString('staging');
+
+// Secret references
+final secretRef = SecretRef.parse('{{secrets.db_password}}');
+if (SecretRef.isSecretRef(value)) {
+  final ref = SecretRef.parse(value);
+  print('Secret: ${ref.key}');
+}
+
+// SSH identity for deployments
+final identity = SshIdentity(
+  privateKeyPath: '~/.ssh/id_rsa',
+  publicKeyPath: '~/.ssh/id_rsa.pub',
+);
+
+// Audit logging
+final audit = AuditEntry(
+  action: 'user.login',
+  userId: 'user_123',
+  timestamp: DateTime.now(),
+  metadata: {'ip': '192.168.1.1'},
+);
+```
+
+### Utilities
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+// Parse environment variables from YAML
+final env = parseEnvironment(yamlMap);
+// Returns: Map<String, String>
+
+// Extract variable references ({{var.name}})
+final extractor = VvarExtractor();
+final refs = extractor.extract(templateString);
+```
+
+### Error Handling
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+try {
+  final config = InstanceConfig.fromMap(invalidYaml);
+} on ApplAdError catch (e) {
+  print('Config error: ${e.message}');
+  print('Code: ${e.code}');
+}
+```
+
+## Configuration Reference
+
+For detailed documentation on each configuration class, see:
+
+- [InstanceConfig](/api/config/instance-config)
+- [OrgConfig](/api/config/org-config)
+- [ProjectConfig](/api/config/project-config)
+- [AuthConfig](/api/config/auth-config)
+- [DatabaseConfig](/api/config/database-config)
+- [StorageConfig](/api/config/storage-config)
+- [FunctionConfig](/api/config/function-config)
+- [DeploymentConfig](/api/config/deployment-config)
+
+## Source Location
+
+`packages/applad_core/lib/applad_core.dart`

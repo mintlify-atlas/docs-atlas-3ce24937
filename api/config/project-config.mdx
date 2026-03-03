@@ -1,0 +1,288 @@
+---
+title: ProjectConfig
+description: Project-level configuration (project.yaml)
+---
+
+## Overview
+
+`ProjectConfig` represents project-level settings, typically stored in `project.yaml`. Projects are the main workspace unit that contains your app's backend configuration.
+
+## Class Definition
+
+```dart
+final class ProjectConfig {
+  const ProjectConfig({
+    required this.id,
+    required this.name,
+    required this.orgId,
+    this.environments = const {},
+    this.defaultEnvironment = Environment.development,
+    this.enabledFeatures = const [],
+  });
+  
+  factory ProjectConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="id" type="String" required>
+  Unique project identifier
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Project display name
+</ParamField>
+
+<ParamField path="orgId" type="String" required>
+  Parent organization ID
+</ParamField>
+
+<ParamField path="environments" type="Map<Environment, ProjectEnvironmentConfig>" default="{}">
+  Environment-specific configurations (development, staging, production)
+</ParamField>
+
+<ParamField path="defaultEnvironment" type="Environment" default="Environment.development">
+  Default environment to use
+</ParamField>
+
+<ParamField path="enabledFeatures" type="List<String>" default="[]">
+  Project-level feature flags
+</ParamField>
+
+## ProjectEnvironmentConfig
+
+Configuration for a specific environment:
+
+<ParamField path="infraTarget" type="String?">
+  Infrastructure deployment target (e.g., `"fly"`, `"railway"`, `"aws"`)
+</ParamField>
+
+<ParamField path="host" type="String?">
+  Host/server address for this environment
+</ParamField>
+
+<ParamField path="user" type="String?">
+  SSH user for deployment
+</ParamField>
+
+<ParamField path="engineVersion" type="String" default="latest">
+  Applad engine version to use
+</ParamField>
+
+<ParamField path="variables" type="Map<String, String>" default="{}">
+  Environment variables specific to this environment
+</ParamField>
+
+## Usage
+
+### Basic Configuration
+
+```yaml
+# project.yaml
+id: mobile-app
+name: Mobile App Backend
+org_id: acme-corp
+default_environment: development
+features:
+  - auth
+  - database
+  - storage
+  - push_notifications
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = ProjectConfig.fromMap(yamlData);
+print('Project: ${config.name}');
+print('Organization: ${config.orgId}');
+print('Default env: ${config.defaultEnvironment.name}');
+```
+
+### With Environments
+
+```yaml
+id: web-app
+name: Web Application
+org_id: startup-inc
+default_environment: development
+
+environments:
+  development:
+    infra_target: local
+    engine_version: latest
+    variables:
+      LOG_LEVEL: debug
+      CORS_ORIGIN: http://localhost:3000
+  
+  staging:
+    infra_target: fly
+    engine_version: "1.2.0"
+    variables:
+      LOG_LEVEL: info
+      CORS_ORIGIN: https://staging.example.com
+  
+  production:
+    infra_target: aws
+    engine_version: "1.2.0"
+    variables:
+      LOG_LEVEL: warn
+      CORS_ORIGIN: https://example.com
+```
+
+```dart
+final config = ProjectConfig.fromMap(yamlData);
+
+// Get production environment config
+final prodEnv = config.environments[Environment.production];
+if (prodEnv != null) {
+  print('Production target: ${prodEnv.infraTarget}');
+  print('Engine version: ${prodEnv.engineVersion}');
+  print('Variables: ${prodEnv.variables}');
+}
+```
+
+### SSH Deployment Configuration
+
+```yaml
+id: api-server
+name: API Server
+org_id: tech-company
+
+environments:
+  production:
+    infrastructure:
+      type: ssh
+      host: api.example.com
+      user: deploy
+    engine_version: "1.2.0"
+    variables:
+      PORT: "8080"
+      DATABASE_URL: "{{secrets.prod_db_url}}"
+```
+
+```dart
+final config = ProjectConfig.fromMap(yamlData);
+final prod = config.environments[Environment.production];
+
+if (prod != null) {
+  print('Deploy to: ${prod.host} as ${prod.user}');
+  print('Environment variables:');
+  prod.variables.forEach((key, value) {
+    print('  $key: $value');
+  });
+}
+```
+
+### Environment Selection
+
+```dart
+final config = ProjectConfig.fromMap(yamlData);
+
+// Get current environment (from CLI arg, env var, or default)
+String envName = Platform.environment['APPLAD_ENV'] ?? 
+                 config.defaultEnvironment.name;
+
+final env = Environment.fromString(envName);
+final envConfig = config.environments[env];
+
+if (envConfig != null) {
+  print('Running in: ${env.name}');
+  print('Target: ${envConfig.infraTarget}');
+} else {
+  print('No configuration for environment: ${env.name}');
+}
+```
+
+### Feature Flags
+
+```yaml
+id: saas-app
+name: SaaS Application
+org_id: startup
+features:
+  auth: true
+  database: true
+  storage: true
+  realtime: true
+  analytics: true
+  ai_features: false  # Not ready yet
+```
+
+```dart
+final config = ProjectConfig.fromMap(yamlData);
+
+bool hasFeature(String feature) {
+  return config.enabledFeatures.contains(feature);
+}
+
+if (hasFeature('analytics')) {
+  // Initialize analytics
+}
+
+if (hasFeature('ai_features')) {
+  // Enable AI features
+}
+```
+
+### Creating Programmatically
+
+```dart
+final config = ProjectConfig(
+  id: 'new-project',
+  name: 'New Project',
+  orgId: 'my-org',
+  defaultEnvironment: Environment.development,
+  environments: {
+    Environment.development: ProjectEnvironmentConfig(
+      infraTarget: 'local',
+      engineVersion: 'latest',
+      variables: {'LOG_LEVEL': 'debug'},
+    ),
+    Environment.production: ProjectEnvironmentConfig(
+      infraTarget: 'fly',
+      engineVersion: '1.2.0',
+      variables: {
+        'LOG_LEVEL': 'error',
+        'DATABASE_URL': '{{secrets.prod_db}}',
+      },
+    ),
+  },
+  enabledFeatures: ['auth', 'database', 'storage'],
+);
+
+final json = config.toJson();
+```
+
+## Environment Enum
+
+Available environments:
+
+```dart
+enum Environment {
+  development,
+  staging,
+  production,
+  preview,
+  test;
+  
+  static Environment fromString(String value);
+}
+```
+
+## Common Infrastructure Targets
+
+- `local` - Local development
+- `fly` - Fly.io
+- `railway` - Railway
+- `render` - Render
+- `aws` - Amazon Web Services
+- `gcp` - Google Cloud Platform
+- `azure` - Microsoft Azure
+- `ssh` - Custom SSH server
+
+## Source Location
+
+`packages/applad_core/lib/src/config/project_config.dart:7`

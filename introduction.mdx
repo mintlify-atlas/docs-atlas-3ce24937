@@ -1,0 +1,159 @@
+---
+title: "What is Applad?"
+description: "Config-driven, AI-Native Backend Engine. Visually managed. Open source."
+---
+
+<p align="center">
+  <img src="/assets/logo.jpg" alt="Applad Logo" width="300" />
+</p>
+
+## Overview
+
+Applad is more than just a Backend-as-a-Service (BaaS). It's the **Infrastructure-as-Code (IaC) tool for your entire backend** — replacing disjointed tools for database, auth, CI/CD, feature flags, and analytics with a single, agentless, coherent system.
+
+Built with Dart and Flutter, Applad is designed to be **very easy to self-host, extend, scale and configure**. The name says it all: **App** — it helps you build and deploy apps. **Lad** — it's your assistant, your collaborator, your infrastructure companion.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get a live backend running in 3 minutes
+  </Card>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install the Applad CLI on your system
+  </Card>
+  <Card
+    title="Core Concepts"
+    icon="lightbulb"
+    href="/concepts/overview"
+  >
+    Learn about Applad's architecture and design
+  </Card>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli/overview"
+  >
+    Explore all available commands
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### YAML-Defined Infrastructure (IaC)
+
+Declare tables, auth, storage, and logic in a single version-controlled config tree. Every click in the UI writes config. Every config change reflects in the UI. There is no gap, no drift, no manual translation.
+
+### Agentless Operation
+
+Connects, provisions, and disconnects via SSH and Docker. No resident agents or background processes on your servers — just like Ansible, but designed for modern backend infrastructure.
+
+### Unified BaaS Environment
+
+Auto-generated REST and GraphQL APIs, identity management, and serverless functions in one system. Everything you need to build production-ready applications without managing infrastructure complexity.
+
+### Declarative Access Control
+
+Manage permissions, roles, and access request workflows directly from your admin database. Config files describe intent; the database enforces it — preventing developers from editing their way to elevated privileges.
+
+### Environment Parity
+
+Maintain exact parity between local development and production with native Docker Compose and VPS orchestration. The same containers run everywhere. No "works on my machine" problems.
+
+### AI-Native Assistant
+
+Integrated "The Lad" agent that can reason about, safe-check, and modify your infrastructure configuration. Accessible via `applad instruct` — self-documenting, professional, and always `--dry-run` capable.
+
+## The Core Reframe
+
+Most teams today run a BaaS for their backend, a separate IaC tool like Terraform for infrastructure, a separate CI/CD tool for deployments, a separate feature flag service, and a separate analytics platform. These tools don't talk to each other, drift apart over time, and require different mental models and skill sets to operate.
+
+**Applad replaces all of them with a single, coherent system.**
+
+The config files are the backend. The admin UI is a lens into them. The AI is the lad that helps you work with both. Every click in the UI writes config. Every config change reflects in the UI. Every instruction you give produces real changes, not just suggestions.
+
+## Where Applad Runs
+
+Applad is designed to run anywhere you can point it:
+
+<Steps>
+  <Step title="Local Development">
+    Your laptop, a home server, a Raspberry Pi. Uses Docker Compose locally — the same Docker Compose it uses on VPS targets — meaning your local environment is a 1:1 mirror of staging and production.
+  </Step>
+  <Step title="VPS">
+    DigitalOcean Droplet, Hetzner server, Linode, bare metal — any machine you own or rent at a flat rate. Full control, predictable costs, and no vendor dependency.
+  </Step>
+  <Step title="Cloud On-Demand">
+    AWS, GCP, Azure — but used surgically, not as a platform commitment. Treat cloud provider resources as adapters you draw from when they make sense for a specific resource.
+  </Step>
+</Steps>
+
+<Note>
+You move along this continuum as your needs grow, and Applad moves with you. Nothing changes about how your application is built or how your config is structured.
+</Note>
+
+## Deploy vs Release
+
+Applad treats deployment and release as fundamentally separate concerns:
+
+**Deploy** is the technical act of putting an artifact somewhere — installing code on a server, submitting a build to the Play Store. It is low-risk, often invisible to users, and fully reversible. This is what `applad deploy` does.
+
+**Release** is the business decision to make functionality live to users. It carries user-facing risk, requires judgment about timing and audience, and is controlled through feature flags.
+
+<Warning>
+These are separate decisions made by separate people at separate times. Code goes to production continuously via deployments. Users see new features when the team is ready to release them via flags.
+</Warning>
+
+## Monorepo Structure
+
+```
+applad/
+├── packages/
+│   ├── applad_core/     # Core BaaS engine, YAML merge & validation
+│   ├── applad_cli/      # Binary CLI tool for infrastructure orchestration
+│   ├── applad_server/   # High-performance Dart Frog API Gateway
+│   ├── applad_console/  # Flutter-based admin & observability dashboard
+│   ├── applad_client/   # Type-safe Dart client SDK for applications
+│   ├── applad_function/ # Function runtime & trigger definitions
+├── examples/            # Canonical starters (e.g., minimal, auth-flow)
+└── docker/              # Base images & orchestration templates
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Install Applad"
+    icon="download"
+    href="/installation"
+  >
+    Set up the Applad CLI on macOS, Linux, or WSL
+  </Card>
+  <Card
+    title="Quick Start Guide"
+    icon="play"
+    href="/quickstart"
+  >
+    Get your first backend running in 3 minutes
+  </Card>
+  <Card
+    title="Vision & Principles"
+    icon="compass"
+    href="/concepts/vision"
+  >
+    Deep dive into the "Why" behind Applad
+  </Card>
+  <Card
+    title="CLI Commands"
+    icon="terminal"
+    href="/cli/overview"
+  >
+    Explore the full CLI command reference
+  </Card>
+</CardGroup>

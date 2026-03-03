@@ -1,0 +1,344 @@
+---
+title: Project Configuration
+description: Define projects, environments, and infrastructure with project.yaml
+---
+
+The `project.yaml` file lives at `orgs/<org-name>/<project-name>/project.yaml` and defines project-level settings. The presence of this file is what tells Applad that the directory is a project — no explicit listing required.
+
+## Basic Structure
+
+```yaml
+id: "mobile-app"
+name: "Mobile App"
+org: "acme-corp"
+description: "Consumer mobile application"
+```
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the project (used in URLs and references)
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Human-readable project name
+</ParamField>
+
+<ParamField path="org" type="string" required>
+  Organization ID this project belongs to (must match parent org directory)
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional description of the project
+</ParamField>
+
+## Project Features
+
+Enable or disable features at the project level:
+
+```yaml
+features:
+  graphql: true
+  realtime: true
+  messaging: true
+  flags: true
+  analytics: true
+  deployments: true
+  instruct: true
+```
+
+<ParamField path="features.graphql" type="boolean" default="true">
+  Enable GraphQL API for this project
+</ParamField>
+
+<ParamField path="features.realtime" type="boolean" default="true">
+  Enable real-time subscriptions
+</ParamField>
+
+<ParamField path="features.messaging" type="boolean" default="true">
+  Enable messaging system (email, SMS, push, etc.)
+</ParamField>
+
+<ParamField path="features.flags" type="boolean" default="true">
+  Enable feature flags
+</ParamField>
+
+<ParamField path="features.analytics" type="boolean" default="true">
+  Enable analytics collection
+</ParamField>
+
+<ParamField path="features.deployments" type="boolean" default="true">
+  Enable deployment pipelines
+</ParamField>
+
+<ParamField path="features.instruct" type="boolean" default="true">
+  Enable Applad Instruct for this project
+</ParamField>
+
+## Environments
+
+Define environments and their infrastructure targets:
+
+```yaml
+environments:
+  - name: "development"
+    url: "http://localhost:8080"
+    infrastructure:
+      type: "local"
+
+  - name: "staging"
+    url: "https://staging-api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "staging.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+      docker_host: "unix:///var/run/docker.sock"
+
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+      docker_host: "unix:///var/run/docker.sock"
+```
+
+<ParamField path="environments[].name" type="string" required>
+  Environment name (e.g., `"development"`, `"staging"`, `"production"`)
+</ParamField>
+
+<ParamField path="environments[].url" type="string" required>
+  Base URL where this environment is accessible
+</ParamField>
+
+### Infrastructure Types
+
+<Accordion title="Local Infrastructure">
+  Runs on your local machine using Docker Compose. No authentication required.
+  
+  ```yaml
+  infrastructure:
+    type: "local"
+  ```
+  
+  <Note>
+  `applad up` synthesizes a `docker-compose.yml` and runs it locally. Same containers as staging and production. Only Docker required — no Dart tooling needed.
+  </Note>
+</Accordion>
+
+<Accordion title="VPS Infrastructure">
+  Runs on a VPS (Virtual Private Server) via SSH.
+  
+  ```yaml
+  infrastructure:
+    type: "vps"
+    host: "staging.acme-corp.com"
+    user: "applad"
+    ssh_key: "ci-github-actions"
+    docker_host: "unix:///var/run/docker.sock"
+  ```
+  
+  <ParamField path="infrastructure.host" type="string" required>
+    SSH hostname or IP address
+  </ParamField>
+  
+  <ParamField path="infrastructure.user" type="string" required>
+    SSH username (typically `"applad"`)
+  </ParamField>
+  
+  <ParamField path="infrastructure.ssh_key" type="string" required>
+    SSH key label from `org.yaml` ssh_keys section
+  </ParamField>
+  
+  <ParamField path="infrastructure.docker_host" type="string" default="unix:///var/run/docker.sock">
+    Docker socket path on the VPS
+  </ParamField>
+</Accordion>
+
+<Accordion title="Cloud Infrastructure">
+  Provision resources on cloud providers (AWS, GCP, Azure, etc.)
+  
+  ```yaml
+  infrastructure:
+    type: "cloud"
+    provider: "aws"
+    region: "us-east-1"
+    credentials: "aws-production"
+  ```
+  
+  <ParamField path="infrastructure.provider" type="string" required>
+    Cloud provider: `"aws"`, `"gcp"`, `"azure"`, etc.
+  </ParamField>
+  
+  <ParamField path="infrastructure.region" type="string" required>
+    Cloud region (e.g., `"us-east-1"`, `"eu-west-1"`)
+  </ParamField>
+  
+  <ParamField path="infrastructure.credentials" type="string" required>
+    Credential reference from admin database
+  </ParamField>
+</Accordion>
+
+## Cloud Adapters
+
+Cloud resources used on-demand alongside VPS infrastructure:
+
+```yaml
+environments:
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+    
+    cloud_adapters:
+      - provider: "aws"
+        region: "eu-west-1"
+        credentials: "aws-production"
+        services:
+          - s3
+          - ses
+          - rds
+
+      - provider: "cloudflare"
+        credentials: "cloudflare-prod"
+        services:
+          - r2
+          - workers
+```
+
+<ParamField path="cloud_adapters[].provider" type="string" required>
+  Cloud provider: `"aws"`, `"gcp"`, `"azure"`, `"cloudflare"`, etc.
+</ParamField>
+
+<ParamField path="cloud_adapters[].region" type="string">
+  Cloud region (provider-dependent)
+</ParamField>
+
+<ParamField path="cloud_adapters[].credentials" type="string" required>
+  Credential reference from admin database
+</ParamField>
+
+<ParamField path="cloud_adapters[].services" type="array" required>
+  List of services to enable (e.g., `s3`, `ses`, `rds`, `r2`, `workers`)
+</ParamField>
+
+<Note>
+**Provisioning and Teardown**
+- Cloud adapters are provisioned by `applad up` when first referenced
+- Torn down explicitly via `applad cloud tear-down <id>`
+- Resources persist between deployments unless explicitly removed
+</Note>
+
+## Member Access
+
+<Note>
+Project-level role overrides and time-limited access live in the admin database, managed via `applad access` commands or the admin UI. They are not defined in `project.yaml`.
+
+Editing this file does not change what anyone can do.
+</Note>
+
+## Complete Example
+
+```yaml
+id: "mobile-app"
+name: "Mobile App"
+org: "acme-corp"
+description: "Consumer mobile application"
+
+features:
+  graphql: true
+  realtime: true
+  messaging: true
+  flags: true
+  analytics: true
+  deployments: true
+  instruct: true
+
+environments:
+  - name: "development"
+    url: "http://localhost:8080"
+    infrastructure:
+      type: "local"
+
+  - name: "staging"
+    url: "https://staging-api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "staging.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+      docker_host: "unix:///var/run/docker.sock"
+
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+      docker_host: "unix:///var/run/docker.sock"
+
+    cloud_adapters:
+      - provider: "aws"
+        region: "eu-west-1"
+        credentials: "aws-production"
+        services:
+          - s3
+          - ses
+          - rds
+
+      - provider: "cloudflare"
+        credentials: "cloudflare-prod"
+        services:
+          - r2
+          - workers
+```
+
+## Project Structure
+
+Once you've created `project.yaml`, organize your project with these subdirectories:
+
+```
+orgs/acme-corp/mobile-app/
+├── project.yaml
+├── .env.example (auto-generated)
+├── auth/
+│   └── auth.yaml
+├── database/
+│   ├── database.yaml
+│   ├── migrations/
+│   └── tables/
+├── storage/
+│   ├── storage.yaml
+│   └── buckets/
+├── functions/
+├── workflows/
+├── messaging/
+│   ├── messaging.yaml
+│   └── templates/
+├── flags/
+├── deployments/
+├── realtime/
+├── analytics/
+└── observability/
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environments" icon="layer-group" href="/config/environments">
+    Configure environment-specific overrides
+  </Card>
+  <Card title="Database" icon="database" href="/database/overview">
+    Set up database connections and tables
+  </Card>
+  <Card title="Functions" icon="function" href="/functions/overview">
+    Create serverless functions
+  </Card>
+  <Card title="Deployments" icon="rocket" href="/deployments/overview">
+    Configure deployment pipelines
+  </Card>
+</CardGroup>

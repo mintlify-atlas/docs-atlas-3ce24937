@@ -1,0 +1,221 @@
+---
+title: Project Setup
+description: Get started with Applad by initializing a new project and configuring your first environment
+---
+
+## Creating a New Project
+
+Applad projects start with `applad init`, which scaffolds the complete directory structure and configuration files you need to get running.
+
+### Initialize from Template
+
+<Steps>
+  <Step title="Choose a template">
+    Select a template that matches your use case:
+
+    ```bash
+    applad init --template saas    # Multi-tenant SaaS with auth and billing
+    applad init --template api     # Lean REST API setup
+    applad init --template cms     # Content management with hosting
+    applad init --template minimal # Bare minimum to start
+    ```
+  </Step>
+
+  <Step title="Review the generated structure">
+    After initialization, you'll have:
+
+    ```
+    my-project/
+    ├── applad.yaml          # Root instance configuration
+    ├── .env.example         # Auto-generated environment variables
+    ├── .gitignore          # Excludes .env files automatically
+    └── orgs/               # Organizations directory
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example environment file and fill in your values:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    The `.env.example` file is auto-generated with annotations showing:
+    - Which config file uses each variable
+    - Expected format
+    - Whether it should be treated as a secret
+  </Step>
+</Steps>
+
+## Instance Configuration
+
+The `applad.yaml` file at the root defines your instance-level configuration:
+
+```yaml applad.yaml
+version: "1.0"
+name: "my-applad-instance"
+description: "My Applad instance"
+
+instance:
+  url: "https://api.myapp.com"
+  region: "us-east-1"
+  secret: ${APPLAD_SECRET}
+
+  features:
+    ui: true
+    api: true
+    graphql: true
+    realtime: true
+    storage: true
+    functions: true
+    deployments: true
+    workflows: true
+    flags: true
+    analytics: true
+    instruct: true
+    messaging: true
+```
+
+## Creating an Organization
+
+Organizations are the top level of the hierarchy. Every project belongs to an org.
+
+<Steps>
+  <Step title="Create the organization">
+    ```bash
+    applad orgs create --name "Acme Corp"
+    ```
+
+    This scaffolds `orgs/acme-corp/org.yaml` with default roles and an empty SSH keys list.
+  </Step>
+
+  <Step title="Switch to your org">
+    Set the active organization context:
+
+    ```bash
+    applad orgs switch acme-corp
+    ```
+  </Step>
+</Steps>
+
+## Creating a Project
+
+Projects live inside organizations and own all resources — tables, functions, deployments, etc.
+
+<Steps>
+  <Step title="Create the project">
+    ```bash
+    applad projects create \
+      --name "Mobile App" \
+      --org "acme-corp"
+    ```
+
+    This creates the project directory at `orgs/acme-corp/mobile-app/` with a `project.yaml` file.
+  </Step>
+
+  <Step title="Configure environments">
+    Edit `orgs/acme-corp/mobile-app/project.yaml` to define your environments:
+
+    ```yaml project.yaml
+    id: "mobile-app"
+    name: "Mobile App"
+    org: "acme-corp"
+    description: "Consumer mobile application"
+
+    environments:
+      - name: "development"
+        url: "http://localhost:8080"
+        infrastructure:
+          type: "local"
+
+      - name: "staging"
+        url: "https://staging-api.myapp.com"
+        infrastructure:
+          type: "vps"
+          host: "staging.acme-corp.com"
+          user: "applad"
+          ssh_key: "ci-github-actions"
+
+      - name: "production"
+        url: "https://api.myapp.com"
+        infrastructure:
+          type: "vps"
+          host: "prod-01.acme-corp.com"
+          user: "applad"
+          ssh_key: "ci-github-actions"
+    ```
+  </Step>
+
+  <Step title="Switch to your project">
+    Set the active project context:
+
+    ```bash
+    applad projects switch mobile-app
+    ```
+  </Step>
+</Steps>
+
+## First Run
+
+Once your project is configured, bring it up:
+
+<Steps>
+  <Step title="Validate your configuration">
+    ```bash
+    applad config validate
+    ```
+
+    This checks syntax, required fields, cross-references, and validates all `${VAR}` references.
+  </Step>
+
+  <Step title="Review what will happen">
+    ```bash
+    applad up --dry-run --diff
+    ```
+
+    Shows exactly what will change without executing anything.
+  </Step>
+
+  <Step title="Start your instance">
+    ```bash
+    applad up
+    ```
+
+    On first run, Applad detects the uninitialized database and runs bootstrap inline. You'll be prompted for:
+    - Instance URL
+    - First owner's email
+    - SSH public key path
+    - Organization name
+
+    After bootstrap completes, your instance is running.
+  </Step>
+</Steps>
+
+## Development Workflow
+
+For local development, use watch mode to automatically reconcile on file changes:
+
+```bash
+applad up --watch
+```
+
+<Warning>
+Only use `--watch` in local development. Never use it in production or CI.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Define Tables" icon="table" href="/guides/database-schema">
+    Create your database schema with tables and migrations
+  </Card>
+  <Card title="Configure Auth" icon="lock" href="/guides/authentication">
+    Set up authentication providers and session management
+  </Card>
+  <Card title="Add Storage" icon="database" href="/guides/storage">
+    Configure file storage with buckets and permissions
+  </Card>
+  <Card title="Deploy Functions" icon="code" href="/guides/functions">
+    Create serverless functions for your backend logic
+  </Card>
+</CardGroup>

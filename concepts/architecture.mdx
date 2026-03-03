@@ -1,0 +1,179 @@
+---
+title: Architecture
+description: Applad's system architecture, monorepo structure, and core technology stack
+---
+
+Applad is an open-source Backend-as-a-Service (BaaS) that replaces disjointed tools for database, auth, CI/CD, feature flags, and analytics with a single, coherent system. More than just a BaaS, Applad is the Infrastructure-as-Code (IaC) tool for your entire backend.
+
+## Core Philosophy
+
+Applad addresses the fundamental problem that most teams face: running a BaaS for their backend, a separate IaC tool like Terraform for infrastructure, a separate CI/CD tool for deployments, a separate feature flag service, and a separate analytics platform. These tools don't talk to each other, drift apart over time, and require different mental models and skill sets to operate.
+
+Applad replaces all of them with a single, coherent system: **Config-driven, AI-Native Backend Engine. Visually managed. Open source.**
+
+<Info>
+The config files are the backend. The admin UI is a lens into them. The AI is the lad that helps you work with both.
+</Info>
+
+Every click in the UI writes config. Every config change reflects in the UI. Every instruction you give produces real changes, not just suggestions. There is no gap, no drift, no manual translation.
+
+## Technology Stack
+
+Applad is built with a carefully chosen technology stack that prioritizes performance, cross-platform compatibility, and maintainability:
+
+- **Dart** for the core — auth, database engine, storage, realtime, CLI, admin Flutter app
+- **Flutter** for the admin console — enabling true cross-platform support beyond just the web
+- **Docker Compose** for orchestration at every level (local, VPS, cloud)
+- **Proven open source tools** for specific functions:
+  - Caddy for reverse proxy and SSL
+  - NATS or Redis for realtime and pub/sub
+  - Rclone for storage adapters
+  - Buildkit for container builds
+  - Cloud provider SDKs for on-demand resources
+
+<Note>
+Nothing is a black box. Everything is inspectable with standard tools your team already knows.
+</Note>
+
+## Monorepo Structure
+
+Applad is organized as a monorepo with clearly separated concerns:
+
+```
+applad/
+├── packages/
+│   ├── applad_core/     # Core BaaS engine, YAML merge & validation
+│   ├── applad_cli/      # Binary CLI tool for infrastructure orchestration
+│   ├── applad_server/   # High-performance Dart Frog API Gateway
+│   ├── applad_console/  # Flutter-based admin & observability dashboard
+│   ├── applad_client/   # Type-safe Dart client SDK for applications
+│   ├── applad_function/ # Function runtime & trigger definitions
+├── examples/            # Canonical starters (e.g., minimal, auth-flow)
+└── docker/              # Base images & orchestration templates
+```
+
+### Package Breakdown
+
+<AccordionGroup>
+  <Accordion title="applad_core">
+    The heart of the system. Contains the BaaS engine, YAML configuration merge logic, validation rules, and core infrastructure primitives.
+  </Accordion>
+
+  <Accordion title="applad_cli">
+    The command-line interface that developers interact with. Handles SSH connections, Docker Compose synthesis, reconciliation logic, and the `applad up` command.
+  </Accordion>
+
+  <Accordion title="applad_server">
+    High-performance API gateway built on Dart Frog. Serves auto-generated REST and GraphQL APIs based on your config tree.
+  </Accordion>
+
+  <Accordion title="applad_console">
+    Flutter-based admin dashboard providing visual management of your infrastructure. Every action in the console writes to your config files.
+  </Accordion>
+
+  <Accordion title="applad_client">
+    Type-safe Dart client SDK that applications use to interact with Applad services. Auto-generated from your table and API definitions.
+  </Accordion>
+
+  <Accordion title="applad_function">
+    Function runtime and trigger definitions supporting multiple languages (Dart, Node.js, Python, Go, PHP, Ruby) each running in isolated Docker containers.
+  </Accordion>
+</AccordionGroup>
+
+## System Components
+
+Applad's architecture is composed of several key systems that work together:
+
+### Configuration Layer
+- **YAML config tree** — the source of truth for your entire backend
+- **Directory structure** — mirrors UI navigation exactly
+- **Config discovery** — `org.yaml` and `project.yaml` marker files define your hierarchy
+- **Environment-specific overrides** — adapt configurations per environment (local, staging, production)
+
+### Runtime Layer
+- **Docker Compose synthesis** — generated from your config at reconciliation time
+- **Service orchestration** — manages databases, storage, functions, messaging, and more
+- **Agentless execution** — SSH in, apply changes, disconnect
+- **Container isolation** — every function runs in its own container with security constraints
+
+### API Layer
+- **Auto-generated REST APIs** — derived from your table definitions
+- **GraphQL support** — optional, enabled per project
+- **Realtime subscriptions** — powered by NATS or Redis
+- **Type-safe SDKs** — generated client libraries for Dart and other languages
+
+### Management Layer
+- **Admin database** — stores access control, secrets, operational state
+- **Audit trail** — every change attributed to an SSH key identity
+- **Flutter console** — visual interface that reads and writes config files
+- **AI assistant (The Lad)** — helps configure, debug, and manage your infrastructure
+
+## Hierarchy Model
+
+Applad uses a three-tier organizational hierarchy:
+
+```
+Instance
+└── Organisation (e.g. acme-corp)
+    ├── Project (e.g. mobile-app)
+    └── Project (e.g. internal-dashboard)
+```
+
+Nothing floats free of this hierarchy. `org.yaml` marks an organization directory. `project.yaml` marks a project directory. Infrastructure targets are defined per project and per environment.
+
+<Warning>
+The same config works at every level of the deployment continuum — local development, VPS staging, VPS production, or cloud-hybrid setups.
+</Warning>
+
+## Polyglot Support
+
+While the core is written in Dart, Applad is polyglot where it matters:
+
+- **Functions** — Dart, Node.js, Python, Go, PHP, Ruby, and more
+- **Each runtime** — isolated in its own Docker container
+- **No language lock-in** — choose the right tool for each function
+- **Standard interfaces** — all runtimes expose the same trigger and invocation model
+
+## Security Architecture
+
+Security is woven through every architectural decision:
+
+- **Config files cannot enforce security over themselves** — access controls live in the admin database
+- **Secrets are injected at runtime** via SSH session, never written to disk on servers
+- **Every function runs in an isolated container** with read-only filesystem, no-new-privileges, and restricted network access
+- **Container images scanned** before deployment
+- **TLS everywhere** via Caddy
+- **SSH key-based auth only** — every operation attributed to a cryptographic identity
+- **Security policies live alongside the resources they protect** — reviewed in the same PR
+
+## No Lock-in at Any Layer
+
+Applad is designed to avoid vendor lock-in at every level:
+
+- **Config** — YAML files you own and version control
+- **Data** — stored in standard databases (PostgreSQL, MySQL, SQLite, MongoDB)
+- **Runtime** — standard Docker containers inspectable with standard tools
+- **Cloud** — use any provider as a utility, not a platform commitment
+- **Secrets** — stored in your encrypted database or your existing secret manager
+- **AI** — bring your own API keys, choose any compatible provider
+
+<Check>
+You can take your Applad config tree to any environment, any cloud provider, or back to bare metal — it works the same everywhere.
+</Check>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Config-Driven Model" icon="file-code" href="/concepts/config-driven">
+    Learn about Applad's YAML configuration tree and infrastructure-as-code approach
+  </Card>
+  <Card title="Agentless Operation" icon="server" href="/concepts/agentless-operation">
+    Understand how Applad connects via SSH without persistent agents
+  </Card>
+  <Card title="Deployment Environments" icon="cloud" href="/concepts/environments">
+    Explore local, VPS, and cloud deployment contexts
+  </Card>
+  <Card title="Idempotency" icon="rotate" href="/concepts/idempotency">
+    Discover how Applad guarantees idempotent reconciliation
+  </Card>
+</CardGroup>

@@ -1,0 +1,155 @@
+---
+title: applad_server
+description: Server runtime library for hosting Applad backend services
+---
+
+## Overview
+
+The `applad_server` package provides the runtime server that hosts Applad backend services, including:
+
+- REST API endpoints for auth, database, storage, and functions
+- WebSocket server for real-time features
+- Request routing and middleware
+- Service orchestration
+
+## Installation
+
+```yaml
+dependencies:
+  applad_server: ^1.0.0
+```
+
+## Main Exports
+
+### ServerConfig
+
+The main server configuration class:
+
+```dart
+import 'package:applad_server/applad_server.dart';
+
+final config = ServerConfig(
+  port: 8080,
+  host: '0.0.0.0',
+  cors: CorsConfig(
+    allowedOrigins: ['http://localhost:3000'],
+    allowedMethods: ['GET', 'POST', 'PUT', 'DELETE'],
+  ),
+);
+```
+
+## Usage
+
+To run an Applad server:
+
+```dart
+import 'package:applad_server/applad_server.dart';
+import 'package:applad_core/applad_core.dart';
+
+void main() async {
+  // Load configuration
+  final instanceConfig = InstanceConfig.fromMap(yamlData);
+  final projectConfig = ProjectConfig.fromMap(projectYaml);
+  
+  // Configure server
+  final serverConfig = ServerConfig(
+    port: 8080,
+    host: '0.0.0.0',
+  );
+  
+  // Start server
+  final server = ApplAdServer(
+    config: serverConfig,
+    instanceConfig: instanceConfig,
+    projectConfig: projectConfig,
+  );
+  
+  await server.start();
+  print('Server running on http://${serverConfig.host}:${serverConfig.port}');
+}
+```
+
+## API Endpoints
+
+The server exposes the following API routes:
+
+### Authentication
+
+- `POST /auth/signup` - Create new account
+- `POST /auth/signin` - Sign in with credentials
+- `POST /auth/signout` - Sign out
+- `GET /auth/user` - Get current user
+- `POST /auth/refresh` - Refresh auth token
+
+### Database
+
+- `GET /tables/:table` - Query table rows
+- `POST /tables/:table` - Insert rows
+- `PATCH /tables/:table` - Update rows
+- `DELETE /tables/:table` - Delete rows
+
+### Storage
+
+- `GET /storage/:bucket/:path` - Download file
+- `POST /storage/:bucket/:path` - Upload file
+- `DELETE /storage/:bucket/:path` - Delete file
+- `GET /storage/:bucket` - List files
+
+### Functions
+
+- `POST /functions/:name` - Invoke serverless function
+
+### Real-time
+
+- `WS /realtime` - WebSocket connection for real-time updates
+
+## Middleware
+
+The server includes built-in middleware for:
+
+- CORS handling
+- Authentication verification
+- Request logging
+- Error handling
+- Rate limiting
+- Request validation
+
+## Configuration
+
+Server behavior is controlled through:
+
+1. `ServerConfig` - Runtime server settings (port, host, CORS)
+2. `InstanceConfig` - Instance-level features and settings
+3. `ProjectConfig` - Project-specific configuration
+4. Service configs - Auth, database, storage, function configs
+
+## Development
+
+For local development:
+
+```bash
+# Start server in development mode
+applad up
+
+# Or run directly
+dart run bin/server.dart
+```
+
+## Production Deployment
+
+The server can be deployed to various platforms:
+
+```bash
+# Deploy to Fly.io
+applad deploy --platform fly
+
+# Deploy to Railway
+applad deploy --platform railway
+
+# Deploy to custom server
+applad deploy --platform ssh --host your-server.com
+```
+
+## Source Location
+
+`packages/applad_server/lib/applad_server.dart`

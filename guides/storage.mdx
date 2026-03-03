@@ -1,0 +1,389 @@
+---
+title: Storage
+description: Configure file storage with adapter-agnostic buckets, permissions, and virus scanning
+---
+
+## Overview
+
+Applad's storage system is adapter-agnostic. You define buckets in YAML under `storage/buckets/`, and Applad handles file operations consistently across local filesystem, S3, R2, GCS, and other providers.
+
+## Storage Configuration
+
+Configure your storage adapter in `storage/storage.yaml`:
+
+```yaml storage/storage.yaml
+adapter: "s3"
+
+config:
+  bucket: ${S3_BUCKET}
+  region: ${S3_REGION}
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  endpoint: ${S3_ENDPOINT}  # Optional — for R2 or custom S3-compatible
+  ssl: true
+```
+
+### Supported Adapters
+
+- **local** — Local filesystem (development)
+- **s3** — Amazon S3
+- **r2** — Cloudflare R2 (S3-compatible)
+- **gcs** — Google Cloud Storage
+- **azure** — Azure Blob Storage
+
+### Environment Overrides
+
+Use different storage backends for different environments:
+
+```yaml storage/storage.yaml
+environment_overrides:
+  development:
+    adapter: "local"
+    config:
+      path: "./data/storage"
+
+  staging:
+    adapter: "s3"
+    config:
+      bucket: ${STAGING_S3_BUCKET}
+      region: ${S3_REGION}
+      access_key: ${S3_ACCESS_KEY}
+      secret_key: ${S3_SECRET_KEY}
+```
+
+## Defining Buckets
+
+Each bucket lives in its own YAML file under `storage/buckets/`.
+
+### Public Bucket Example
+
+```yaml storage/buckets/avatars.yaml
+name: "avatars"
+public: true
+max_file_size: "5mb"
+allowed_types: ["image/jpeg", "image/png", "image/webp"]
+
+scan:
+  enabled: true
+  block_on_threat: true
+
+permissions:
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "owner_id == $user.id"
+
+  - role: "*"
+    actions: ["read"]
+
+  - role: "admin"
+    actions: ["*"]
+```
+
+### Private Bucket Example
+
+```yaml storage/buckets/documents.yaml
+name: "documents"
+public: false
+max_file_size: "50mb"
+allowed_types: ["application/pdf", "text/*", "application/msword"]
+
+scan:
+  enabled: true
+  block_on_threat: true
+
+encryption:
+  at_rest: true
+
+permissions:
+  - role: "admin"
+    actions: ["*"]
+
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "org_id == $user.org_id"
+```
+
+## Bucket Configuration
+
+### Visibility
+
+- `public: true` — Files are accessible via public URL
+- `public: false` — Files require authentication to access
+
+### File Size Limits
+
+Specify maximum file size:
+
+```yaml
+max_file_size: "5mb"   # Accepts kb, mb, gb
+```
+
+### Allowed File Types
+
+Restrict file uploads by MIME type:
+
+```yaml
+allowed_types:
+  - "image/jpeg"
+  - "image/png"
+  - "image/webp"
+  - "application/pdf"
+  - "text/*"  # Wildcard for all text types
+```
+
+### Virus Scanning
+
+Enable automatic virus scanning on upload:
+
+```yaml
+scan:
+  enabled: true
+  block_on_threat: true  # Reject infected files
+```
+
+### Encryption at Rest
+
+Enable encryption for sensitive files:
+
+```yaml
+encryption:
+  at_rest: true
+```
+
+## Permissions
+
+Permission rules control who can upload, download, and delete files:
+
+```yaml
+permissions:
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "owner_id == $user.id"
+
+  - role: "*"
+    actions: ["read"]
+
+  - role: "admin"
+    actions: ["*"]
+```
+
+### Permission Actions
+
+- `read` — Download files
+- `write` — Upload files
+- `delete` — Delete files
+- `*` — All actions
+
+### Permission Filters
+
+```yaml
+# Only own files
+filter: "owner_id == $user.id"
+
+# Org-level access
+filter: "org_id == $user.org_id"
+
+# Admin or owner
+filter: "owner_id == $user.id OR $user.role == 'admin'"
+```
+
+## Working with Files
+
+### List buckets
+
+```bash
+applad storage list
+```
+
+Shows all buckets with visibility, size limits, and allowed types.
+
+### List files in a bucket
+
+```bash
+applad storage ls avatars
+```
+
+Shows filename, size, content type, upload date, and owner.
+
+### Upload a file
+
+```bash
+applad storage upload avatars ./avatar.png
+```
+
+Applies virus scan, file type validation, and size limit before accepting.
+
+### Download a file
+
+```bash
+applad storage download avatars avatar.png
+```
+
+Works with both public and private buckets. For private buckets, your SSH key identity is used to authorize the download.
+
+### Delete a file
+
+```bash
+applad storage delete avatars avatar.png
+```
+
+<Warning>
+File deletion is permanent and cannot be undone.
+</Warning>
+
+### Move or rename a file
+
+```bash
+applad storage move avatars old-avatar.png new-avatar.png
+```
+
+The source file is removed after the copy is confirmed.
+
+### Scan bucket for threats
+
+```bash
+applad storage scan avatars
+```
+
+Runs a virus scan on all files currently stored in a bucket. By default, Applad scans files at upload time — use this to scan existing files retrospectively.
+
+## Environment Variables
+
+Storage configuration requires these environment variables:
+
+```bash .env
+# Storage — S3
+S3_BUCKET=
+S3_REGION=
+S3_ACCESS_KEY=     # [SECRET] applad secrets set S3_ACCESS_KEY
+S3_SECRET_KEY=     # [SECRET] applad secrets set S3_SECRET_KEY
+S3_ENDPOINT=       # Optional — for R2 or custom S3-compatible endpoints
+
+# Staging override
+STAGING_S3_BUCKET=
+```
+
+## Switching Storage Adapters
+
+Switching from local to S3 to R2 is a one-line change. Application code never changes.
+
+<Steps>
+  <Step title="Update adapter configuration">
+    ```yaml storage/storage.yaml
+    adapter: "r2"  # Changed from "s3"
+
+    config:
+      bucket: ${R2_BUCKET}
+      region: ${R2_REGION}
+      access_key: ${R2_ACCESS_KEY}
+      secret_key: ${R2_SECRET_KEY}
+      endpoint: ${R2_ENDPOINT}
+      ssl: true
+    ```
+  </Step>
+
+  <Step title="Update environment variables">
+    ```bash
+    applad secrets set R2_ACCESS_KEY
+    applad secrets set R2_SECRET_KEY
+    ```
+  </Step>
+
+  <Step title="Reconcile">
+    ```bash
+    applad up --dry-run --diff
+    applad up
+    ```
+
+    Applad updates the storage adapter. No application code changes required.
+  </Step>
+</Steps>
+
+## Example: Media Storage Setup
+
+Complete storage configuration for a media-heavy application:
+
+```yaml storage/storage.yaml
+adapter: "s3"
+
+config:
+  bucket: ${S3_BUCKET}
+  region: ${S3_REGION}
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  ssl: true
+
+environment_overrides:
+  development:
+    adapter: "local"
+    config:
+      path: "./data/storage"
+```
+
+```yaml storage/buckets/avatars.yaml
+name: "avatars"
+public: true
+max_file_size: "5mb"
+allowed_types: ["image/jpeg", "image/png", "image/webp"]
+
+scan:
+  enabled: true
+  block_on_threat: true
+
+permissions:
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "owner_id == $user.id"
+  - role: "*"
+    actions: ["read"]
+```
+
+```yaml storage/buckets/videos.yaml
+name: "videos"
+public: true
+max_file_size: "500mb"
+allowed_types: ["video/mp4", "video/webm"]
+
+scan:
+  enabled: true
+  block_on_threat: true
+
+permissions:
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "owner_id == $user.id"
+  - role: "*"
+    actions: ["read"]
+```
+
+```yaml storage/buckets/private-documents.yaml
+name: "private-documents"
+public: false
+max_file_size: "50mb"
+allowed_types: ["application/pdf", "text/*", "application/msword"]
+
+scan:
+  enabled: true
+  block_on_threat: true
+
+encryption:
+  at_rest: true
+
+permissions:
+  - role: "admin"
+    actions: ["*"]
+  - role: "user"
+    actions: ["read", "write"]
+    filter: "org_id == $user.org_id"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Functions" icon="code" href="/guides/functions">
+    Create serverless functions for backend logic
+  </Card>
+  <Card title="Messaging" icon="envelope" href="/guides/messaging">
+    Configure email, SMS, and push notifications
+  </Card>
+</CardGroup>

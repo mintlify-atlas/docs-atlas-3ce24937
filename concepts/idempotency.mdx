@@ -1,0 +1,360 @@
+---
+title: Idempotency
+description: How Applad guarantees idempotent reconciliation for safe, repeatable infrastructure operations
+---
+
+Applad's reconciliation model is **fully idempotent**. Running `applad up` twice produces the same result as running it once. Running it against an already-reconciled environment is a no-op that produces a clean recap confirming nothing changed.
+
+<Info>
+This is guaranteed — not incidental, not aspirational, not "usually true."
+</Info>
+
+## Why Idempotency Matters
+
+Idempotency is not just a nice-to-have property. It's essential for several critical use cases:
+
+### CI/CD Pipelines
+
+Pipelines that run `applad up` on every push need to know that a no-change run won't cause:
+- Unnecessary service restarts
+- Downtime
+- Spurious audit entries
+- False positive alerts
+
+```yaml .github/workflows/deploy.yml
+- name: Deploy to staging
+  run: applad up --env staging
+```
+
+This can run on every commit. If nothing changed in the config, nothing changes in the infrastructure. No restarts, no downtime, no noise.
+
+### Recovery Scenarios
+
+When you need to re-run `applad up` after a partial failure, you need confidence that:
+- Migrations that already ran won't run again
+- Services that are healthy won't restart
+- Resources that are correctly configured won't be touched
+
+### Team Environments
+
+When multiple developers might run `applad up` in quick succession (or simultaneously), the system needs to handle it gracefully:
+- No race conditions
+- No duplicate operations
+- No conflicting state changes
+
+## Idempotency Strategies
+
+Each resource type in Applad has an explicit idempotency strategy:
+
+<AccordionGroup>
+  <Accordion title="Containers">
+    Compared by **image digest** and **environment hash**. Only restarted if either has changed.
+
+    ```
+    Current state: image:sha256:abc123, env:hash456
+    Desired state: image:sha256:abc123, env:hash456
+    Action: No-op (already correct)
+    ```
+
+    ```
+    Current state: image:sha256:abc123, env:hash456
+    Desired state: image:sha256:def789, env:hash456
+    Action: Pull new image, restart container
+    ```
+  </Accordion>
+
+  <Accordion title="Migrations">
+    Tracked by **checksum** in the migration history table. Never re-applied.
+
+    ```sql
+    CREATE TABLE _applad_migrations (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      checksum TEXT NOT NULL,
+      applied_at TIMESTAMP NOT NULL
+    );
+    ```
+
+    Before running a migration, Applad checks if a row exists with matching name and checksum. If yes, skip. If no, run and record.
+  </Accordion>
+
+  <Accordion title="Config">
+    Compared against the **last-applied config signature**. No-op if unchanged.
+
+    Applad stores a hash of the applied configuration for each resource. On reconciliation:
+    - Compute hash of desired config
+    - Compare to stored hash
+    - If identical, skip
+    - If different, apply and update stored hash
+  </Accordion>
+
+  <Accordion title="Cloud Resources">
+    Checked for **existence** before provisioning. Existing resources with matching config are left untouched.
+
+    ```
+    1. Check if S3 bucket "myapp-avatars" exists
+    2. If no: create it
+    3. If yes: check if config matches (region, encryption, lifecycle rules)
+    4. If config matches: no-op
+    5. If config differs: update configuration
+    ```
+  </Accordion>
+
+  <Accordion title="Caddy Config">
+    Generated **deterministically** from deployment config. Reloaded only if the output differs from running config.
+
+    Applad synthesizes Caddy configuration from `deployments/*.yaml`. Before reloading:
+    - Generate Caddyfile from current config
+    - Compare to running Caddyfile
+    - If identical, skip reload
+    - If different, reload Caddy (graceful, zero-downtime)
+  </Accordion>
+
+  <Accordion title="SSH Sessions">
+    Opened **only if work needs to be done**. A fully reconciled environment opens no SSH connections.
+
+    ```bash
+    $ applad up --env production
+
+    RECAP ─────────────────────────────────────────────
+      environment   production
+      duration      0.8s
+      actor         alice@acme-corp (SHA256:abc123...)
+
+      ok            12    already correct, no changes
+      changed        0
+    ─────────────────────────────────────────────────────
+    ```
+
+    Duration 0.8s — no SSH connection was made. Config was compared locally, everything matched, done.
+  </Accordion>
+</AccordionGroup>
+
+## The Handler Pattern
+
+Applad uses a handler pattern for service restarts, modeled on Ansible's handler system.
+
+<Info>
+When multiple config changes would each individually trigger a service restart, Applad batches them and restarts the service exactly once at the end of the reconciliation run.
+</Info>
+
+### Without Handlers
+
+```
+Change messaging config → restart messaging service
+Update messaging template → restart messaging service  
+Rotate messaging API key → restart messaging service
+
+Result: 3 restarts, 3× downtime
+```
+
+### With Handlers
+
+```
+Change messaging config → mark handler: restart-messaging
+Update messaging template → mark handler: restart-messaging
+Rotate messaging API key → mark handler: restart-messaging
+
+[All changes applied]
+
+Run handlers:
+  restart-messaging → restart once
+
+Result: 1 restart, 1× downtime
+```
+
+The handler pattern applies to:
+
+- **Service restarts** — only if one or more dependent configs changed
+- **Migration runs** — all pending migrations for a connection run in a single transaction
+- **Config reloads** — Caddy config reloaded once after all web deployment config changes are applied
+- **Post-deploy health checks** — run once after all functions in a batch are deployed
+- **`.env.example` regeneration** — regenerated once after all config changes in a run
+
+<Check>
+`applad up` is both correct and efficient. It does exactly the work that needs doing, in the right order, and no more.
+</Check>
+
+## Drift Detection
+
+Drift detection is the companion to idempotency. `applad status --drift` connects to every configured environment, compares the running state against the config tree, and reports what has drifted — **without changing anything**.
+
+```bash
+$ applad status --drift --env production
+
+DRIFT REPORT ─────────────────────────────────────
+  environment   production
+
+  ✓ database         in sync
+  ✗ functions        drift detected
+      send-welcome-message: running v1.2.0, config specifies v1.3.0
+  ✓ storage          in sync
+  ✓ messaging        in sync
+  ✗ observability    drift detected
+      rate_limiting.routes[/auth/*].requests: running 20, config specifies 15
+  ✓ deployments      in sync
+──────────────────────────────────────────────────
+  2 resources drifted. Run applad up --env production to reconcile.
+```
+
+This is continuous monitoring of the idempotency contract. Applad can tell you at any time whether reality matches your config, and what the delta is if not.
+
+## Predictability Contract
+
+Idempotency is part of a larger predictability contract that Applad makes:
+
+<Steps>
+  <Step title="--dry-run tells you exactly what will change">
+    Every service that would start or restart. Every config change. Every migration that would run. Every cloud resource that would be provisioned. Every SSH connection that would open.
+
+    ```bash
+    $ applad up --env production --dry-run --diff
+    ```
+  </Step>
+  <Step title="applad up changes exactly that and nothing else">
+    If `--dry-run` showed it, it happens. If `--dry-run` didn't show it, it doesn't happen.
+
+    ```bash
+    $ applad up --env production
+    ```
+  </Step>
+  <Step title="The recap tells you what happened">
+    A clean summary of what was already correct (`ok`), what changed (`changed`), and what failed (`failed`).
+
+    ```bash
+    RECAP ─────────────────────────────────────────────
+      environment   production
+      duration      14.2s
+      actor         alice@acme-corp (SHA256:abc123...)
+
+      ok            12    already correct, no changes
+      changed        3    database, functions, messaging
+      skipped        0
+      failed         0
+
+      ✓ 2 pending migrations applied (primary)
+      ✓ send-welcome-message redeployed (source updated)
+      ✓ messaging config reconciled (provider changed to ses)
+    ─────────────────────────────────────────────────────
+    ```
+  </Step>
+  <Step title="The audit trail records who did it">
+    Every run, every change, every SSH session, attributed to the initiating SSH key identity.
+  </Step>
+</Steps>
+
+<Warning>
+This is the operational contract. It is non-negotiable. Every command in Applad upholds it.
+</Warning>
+
+## Comparison to Other Tools
+
+### Ansible
+
+- **Claim:** "Ansible is idempotent"
+- **Reality:** Modules are *usually* idempotent, but there are edge cases. Complex playbooks with conditionals and loops can have subtle non-idempotent behavior.
+- **Applad:** Idempotency is guaranteed by design at the reconciliation layer, not left to individual resource implementations.
+
+### Terraform
+
+- **Strength:** Terraform is very good at idempotency for cloud resources.
+- **Weakness:** Terraform's state file can drift from reality. Running `terraform apply` after manual changes can produce unexpected results.
+- **Applad:** No separate state file. Applad compares desired state (from config) directly against running state (from infrastructure) on every reconciliation.
+
+### Docker Compose
+
+- **Behavior:** `docker compose up` is mostly idempotent, but:
+  - Recreates containers even if nothing changed (depending on flags)
+  - No built-in drift detection
+  - No concept of "no-op" reconciliation
+- **Applad:** Uses Docker Compose as the runtime, but adds an idempotency layer on top that prevents unnecessary recreations.
+
+## Testing Idempotency
+
+You can verify Applad's idempotency guarantee:
+
+```bash
+# First run - apply changes
+$ applad up --env production
+
+RECAP ─────────────────────────────────────────────
+  changed        5    database, functions, messaging, storage, deployments
+─────────────────────────────────────────────────────
+```
+
+```bash
+# Second run - should be a no-op
+$ applad up --env production
+
+RECAP ─────────────────────────────────────────────
+  ok            12    already correct, no changes
+  changed        0
+─────────────────────────────────────────────────────
+```
+
+<Check>
+Running it twice produces the same result as running it once. This is the idempotency contract in action.
+</Check>
+
+## Idempotency in CI/CD
+
+A common CI/CD pattern:
+
+```yaml .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Applad CLI
+        run: curl -fsSL https://install.applad.dev | bash
+      - name: Deploy to production
+        run: applad up --env production
+```
+
+This runs on every push to `main`. Because Applad is idempotent:
+- Pushes with only README changes → no-op, no restarts
+- Pushes with config changes → only affected services restart
+- Multiple concurrent runs → safe (last one wins, intermediate states are valid)
+
+## Exit Codes for Automation
+
+Applad's exit codes help automation differentiate between types of success:
+
+| Code | Meaning | Use Case |
+|------|---------|----------|
+| `0` | Success — no changes needed | Skip downstream notifications |
+| `2` | Success with changes | Trigger Slack notification, run smoke tests |
+| `1` | Error — command failed | Alert on-call, roll back |
+| `3` | Validation failure | Fix config, try again |
+| `5` | Drift detected | Investigate manual changes |
+
+```bash
+applad up --env production
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 2 ]; then
+  # Changes were applied - run smoke tests
+  ./smoke-tests.sh
+elif [ $EXIT_CODE -eq 0 ]; then
+  # No changes needed - all good
+  echo "✓ Production already in sync"
+fi
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Learn about Applad's overall system architecture
+  </Card>
+  <Card title="Agentless Operation" icon="server" href="/concepts/agentless-operation">
+    Understand how Applad connects via SSH without persistent agents
+  </Card>
+</CardGroup>

@@ -1,0 +1,68 @@
+---
+title: applad down
+description: Stop local instance or tear down environment infrastructure
+---
+
+## Overview
+
+Stops the local running Applad instance for development use, or tears down all infrastructure for a specific environment. When used with `--env`, it stops containers, removes services, and disconnects adapters by SSHing into the target, cleaning up, and leaving.
+
+**Important**: Does not delete your database or stored files when tearing down environments.
+
+## Usage
+
+```bash
+applad down [--env <environment>]
+```
+
+## Options
+
+<ParamField path="--env" type="string">
+  Tears down all infrastructure for a specific environment — stops containers, removes services, disconnects adapters. SSHes into the target, cleans up, and leaves. Use with care in production. Does not delete your database or stored files.
+</ParamField>
+
+## Examples
+
+### Stop local instance
+
+```bash
+applad down
+```
+
+Stops the local running Applad instance for development use.
+
+### Tear down staging environment
+
+```bash
+applad down --env staging
+```
+
+Completely tears down the staging environment infrastructure. Database and files are preserved.
+
+### Tear down production environment
+
+```bash
+applad down --env production
+```
+
+**Warning**: Use with extreme care. Tears down all production infrastructure while preserving data.
+
+## What Gets Removed
+
+When using `--env`, the following are removed:
+- Running Docker containers
+- Service configurations
+- Adapter connections
+
+## What Is Preserved
+
+- Database contents
+- Stored files
+- Configuration files in your local project
+
+## Safety Notes
+
+- Use `--env production` with extreme caution
+- Always verify you're targeting the correct environment
+- This does NOT delete data — only infrastructure
+- You can rebuild the environment by running `applad up --env <environment>`

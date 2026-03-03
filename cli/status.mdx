@@ -1,0 +1,80 @@
+---
+title: applad status
+description: Check health and connectivity status across all environments
+---
+
+## Overview
+
+Shows the health and connectivity status of your entire Applad instance across all environments. Tells you whether each environment's infrastructure is reachable, whether services are running, whether adapter connections are healthy, and whether any config has drifted from the running state.
+
+## Usage
+
+```bash
+applad status [options]
+```
+
+## Options
+
+<ParamField path="--env" type="string">
+  Scopes the status check to a single environment. Useful for quickly checking whether production is healthy without the noise of other environments.
+</ParamField>
+
+<ParamField path="--drift" type="boolean" default="false">
+  Shows whether any configuration has drifted from the running state. Helps identify when the actual infrastructure state differs from your configuration files.
+</ParamField>
+
+## Examples
+
+### Check status of all environments
+
+```bash
+applad status
+```
+
+Shows health and connectivity for every configured environment.
+
+### Check production status only
+
+```bash
+applad status --env production
+```
+
+Displays status information only for the production environment.
+
+### Check for configuration drift
+
+```bash
+applad status --drift
+```
+
+Shows health status and highlights any configuration drift across all environments.
+
+### Check drift for a specific environment
+
+```bash
+applad status --env production --drift
+```
+
+Shows production health status and any configuration drift.
+
+## What Gets Checked
+
+The status command reports on:
+- **Infrastructure reachability** - Whether the environment's servers are accessible
+- **Service status** - Whether Docker containers and services are running
+- **Adapter health** - Whether database, storage, and other adapter connections are working
+- **Configuration drift** - Whether the running configuration matches your local files (when `--drift` is used)
+
+## Status Indicators
+
+- **Healthy** - Environment is fully operational
+- **Degraded** - Some services or adapters are having issues
+- **Unreachable** - Cannot connect to the environment's infrastructure
+- **Drifted** - Running configuration doesn't match local config files
+
+## Use Cases
+
+- **Health monitoring** - Regular checks to ensure environments are operational
+- **Pre-deployment validation** - Verify environment health before deploying
+- **Drift detection** - Identify when manual changes have been made to infrastructure
+- **Troubleshooting** - Quickly identify which components are having issues

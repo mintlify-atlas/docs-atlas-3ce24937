@@ -1,0 +1,312 @@
+---
+title: applad_function
+description: Runtime library for building serverless functions with Applad
+---
+
+## Overview
+
+The `applad_function` package provides the runtime types and utilities for building serverless functions that run on the Applad platform.
+
+## Installation
+
+```yaml
+dependencies:
+  applad_function: ^1.0.0
+```
+
+## Quick Start
+
+Create a function handler:
+
+```dart
+import 'package:applad_function/applad_function.dart';
+
+AppladResponse handler(AppladRequest request) {
+  final name = request.body['name'] ?? 'World';
+  
+  return AppladResponse.json({
+    'message': 'Hello, $name!',
+    'timestamp': DateTime.now().toIso8601String(),
+  });
+}
+```
+
+## AppladRequest
+
+Encapsulates the data passed to your serverless function.
+
+### Properties
+
+<ResponseField name="body" type="Map<String, dynamic>" required>
+  The JSON-decoded request body or event payload
+</ResponseField>
+
+<ResponseField name="headers" type="Map<String, String>">
+  HTTP headers if the function was triggered via HTTP or webhook. Empty map for event-triggered functions.
+</ResponseField>
+
+<ResponseField name="context" type="Map<String, dynamic>">
+  Execution context provided by Applad, such as:
+  - `user` - Authenticated user information (if available)
+  - `project_id` - The project ID
+  - `environment` - Environment name (development, production, etc.)
+  - `function_name` - Name of the current function
+  - `request_id` - Unique request identifier for tracing
+</ResponseField>
+
+### Example
+
+```dart
+AppladResponse handler(AppladRequest request) {
+  // Access request body
+  final email = request.body['email'] as String;
+  
+  // Check headers
+  final userAgent = request.headers['user-agent'];
+  
+  // Get authenticated user from context
+  final user = request.context['user'] as Map<String, dynamic>?;
+  final userId = user?['id'];
+  
+  return AppladResponse.json({
+    'user_id': userId,
+    'email': email,
+  });
+}
+```
+
+## AppladResponse
+
+Encapsulates the result returned by your serverless function.
+
+### Constructor
+
+<ParamField path="statusCode" type="int" default="200">
+  HTTP status code to return
+</ParamField>
+
+<ParamField path="data" type="Map<String, dynamic>" required>
+  The JSON data to return in the response body
+</ParamField>
+
+<ParamField path="headers" type="Map<String, String>" default="{}">
+  Optional HTTP response headers
+</ParamField>
+
+### Factory Methods
+
+#### json()
+
+Helper for creating JSON responses:
+
+```dart
+factory AppladResponse.json(
+  Map<String, dynamic> data,
+  {int statusCode = 200}
+)
+```
+
+### Examples
+
+```dart
+// Success response
+return AppladResponse.json({
+  'success': true,
+  'data': results,
+});
+
+// Created response (201)
+return AppladResponse.json(
+  {'id': newId},
+  statusCode: 201,
+);
+
+// Error response
+return AppladResponse.json(
+  {'error': 'Invalid request'},
+  statusCode: 400,
+);
+
+// Response with custom headers
+return AppladResponse(
+  statusCode: 200,
+  data: {'message': 'OK'},
+  headers: {
+    'X-Custom-Header': 'value',
+    'Cache-Control': 'no-cache',
+  },
+);
+```
+
+## Function Handlers
+
+Your function handler is a top-level function with this signature:
+
+```dart
+AppladResponse handler(AppladRequest request) {
+  // Your logic here
+}
+```
+
+Or for async operations:
+
+```dart
+Future<AppladResponse> handler(AppladRequest request) async {
+  // Async logic here
+}
+```
+
+## Common Patterns
+
+### Database Access
+
+```dart
+import 'package:applad_function/applad_function.dart';
+import 'package:postgres/postgres.dart';
+
+Future<AppladResponse> handler(AppladRequest request) async {
+  final conn = PostgreSQLConnection(
+    'localhost', 5432, 'mydb',
+    username: 'user',
+    password: 'pass',
+  );
+  
+  await conn.open();
+  
+  try {
+    final results = await conn.query(
+      'SELECT * FROM users WHERE id = @id',
+      substitutionValues: {'id': request.body['user_id']},
+    );
+    
+    return AppladResponse.json({
+      'user': results.first.toColumnMap(),
+    });
+  } finally {
+    await conn.close();
+  }
+}
+```
+
+### HTTP Requests
+
+```dart
+import 'package:applad_function/applad_function.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+Future<AppladResponse> handler(AppladRequest request) async {
+  final response = await http.get(
+    Uri.parse('https://api.example.com/data'),
+  );
+  
+  if (response.statusCode == 200) {
+    final data = json.decode(response.body);
+    return AppladResponse.json({'data': data});
+  }
+  
+  return AppladResponse.json(
+    {'error': 'Failed to fetch data'},
+    statusCode: 500,
+  );
+}
+```
+
+### Authentication
+
+```dart
+import 'package:applad_function/applad_function.dart';
+
+AppladResponse handler(AppladRequest request) {
+  // Check if user is authenticated
+  final user = request.context['user'];
+  
+  if (user == null) {
+    return AppladResponse.json(
+      {'error': 'Unauthorized'},
+      statusCode: 401,
+    );
+  }
+  
+  // User is authenticated, proceed
+  return AppladResponse.json({
+    'message': 'Welcome, ${user['email']}!',
+  });
+}
+```
+
+### Email Sending
+
+```dart
+import 'package:applad_function/applad_function.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
+
+Future<AppladResponse> handler(AppladRequest request) async {
+  final to = request.body['to'] as String;
+  final subject = request.body['subject'] as String;
+  final body = request.body['body'] as String;
+  
+  final smtpServer = gmail('your-email@gmail.com', 'your-password');
+  
+  final message = Message()
+    ..from = Address('your-email@gmail.com', 'Your App')
+    ..recipients.add(to)
+    ..subject = subject
+    ..text = body;
+  
+  try {
+    await send(message, smtpServer);
+    return AppladResponse.json({'success': true});
+  } catch (e) {
+    return AppladResponse.json(
+      {'error': e.toString()},
+      statusCode: 500,
+    );
+  }
+}
+```
+
+## Function Configuration
+
+Functions are configured via `function.yaml`:
+
+```yaml
+name: send-email
+runtime: dart
+trigger: http
+memory: 256
+timeout_seconds: 60
+environment:
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+```
+
+See [FunctionConfig](/api/config/function-config) for all configuration options.
+
+## Deployment
+
+Deploy your function:
+
+```bash
+applad functions deploy send-email
+```
+
+Invoke from client:
+
+```dart
+final result = await client.functions.invoke(
+  'send-email',
+  body: {
+    'to': 'user@example.com',
+    'subject': 'Hello',
+    'body': 'Welcome to Applad!',
+  },
+);
+```
+
+## Source Location
+
+- Main library: `packages/applad_function/lib/applad_function.dart`
+- Request: `packages/applad_function/lib/src/applad_request.dart`
+- Response: `packages/applad_function/lib/src/applad_response.dart`

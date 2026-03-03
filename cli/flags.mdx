@@ -1,0 +1,97 @@
+---
+title: applad flags
+description: Manage feature flags and release controls
+---
+
+## Overview
+
+Manages feature flags in your Applad project. Flag skeletons — that a flag exists, its variants, its per-environment defaults — live in `flags/*.yaml` and are version controlled. Targeting rules (which users see which variant) live in the admin database and are managed through the UI without a deployment. This is how deploy and release are kept separate: deploy puts code on the server, flags release it to users.
+
+## Commands
+
+### applad flags list
+
+Lists all feature flags defined in the active project's `flags/` directory, along with their type (boolean or multivariate), their per-environment defaults, and whether targeting rules have been configured in the admin database.
+
+```bash
+applad flags list
+```
+
+### applad flags generate
+
+Generates a new empty flag skeleton file at `flags/<key>.yaml`. Edit it to set the flag type, variants, and per-environment defaults. Targeting rules are then configured through the admin UI.
+
+```bash
+applad flags generate <key>
+```
+
+**Example:**
+```bash
+applad flags generate new-checkout-flow
+```
+
+### applad flags validate
+
+Validates all flag definition files — checks syntax, that multivariate flags have at least two variants, and that the default value is one of the defined variants.
+
+```bash
+applad flags validate
+```
+
+### applad flags show
+
+Shows the full definition for a specific flag — its type, variants, per-environment defaults, and the targeting rules currently configured in the admin database.
+
+```bash
+applad flags show <key>
+```
+
+**Example:**
+```bash
+applad flags show new-checkout-flow
+```
+
+### applad flags enable
+
+Enables a flag for a specific environment by setting its default to `true` (for boolean flags) or to the first non-control variant (for multivariate flags). This updates the admin database — no deployment required. Product managers can do this through the admin UI as well.
+
+```bash
+applad flags enable <key> --env production
+```
+
+**Example:**
+```bash
+applad flags enable dark-mode --env production
+```
+
+### applad flags disable
+
+Disables a flag for a specific environment, reverting it to its default-off state. Takes effect immediately without a deployment.
+
+```bash
+applad flags disable <key> --env production
+```
+
+**Example:**
+```bash
+applad flags disable experimental-feature --env production
+```
+
+### applad flags logs
+
+Shows the evaluation history for a flag — every time it was evaluated, which variant was returned, and for which user. Useful for verifying that a flag is being evaluated correctly and that targeting rules are working as expected.
+
+```bash
+applad flags logs <key>
+```
+
+**Example:**
+```bash
+applad flags logs new-dashboard
+```
+
+## Related Commands
+
+- [applad deploy](/cli/deploy) - Deploy code (separate from feature release)
+- [applad config](/cli/config) - Manage configuration files
+- [Feature flags guide](/guides/feature-flags) - Learn about the deploy vs release separation

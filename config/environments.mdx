@@ -1,0 +1,430 @@
+---
+title: Environment Configuration
+description: Configure environment-specific overrides and settings across your Applad project
+---
+
+Environments in Applad allow you to run the same application configuration with different settings for development, staging, and production. Environment-specific overrides are supported throughout the configuration system.
+
+## Defining Environments
+
+Environments are defined in `project.yaml`:
+
+```yaml
+environments:
+  - name: "development"
+    url: "http://localhost:8080"
+    infrastructure:
+      type: "local"
+
+  - name: "staging"
+    url: "https://staging-api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "staging.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+      user: "applad"
+      ssh_key: "ci-github-actions"
+```
+
+Each environment specifies:
+- **Name**: Environment identifier (e.g., `development`, `staging`, `production`)
+- **URL**: Base URL where the environment is accessible
+- **Infrastructure**: Where and how to deploy this environment
+
+## Environment Overrides
+
+Many configuration files support an `environment_overrides` section that allows per-environment customization.
+
+### Database Overrides
+
+Use different database adapters or connection settings per environment:
+
+```yaml
+# database/database.yaml
+connections:
+  - id: "primary"
+    default: true
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+    pool:
+      min: 2
+      max: 20
+
+environment_overrides:
+  development:
+    primary:
+      adapter: "sqlite"
+      path: "./data/dev.db"
+  
+  staging:
+    primary:
+      adapter: "postgres"
+      url: ${STAGING_DATABASE_URL}
+      pool:
+        min: 1
+        max: 5
+```
+
+<Accordion title="How Database Overrides Work">
+  1. Base `connections` configuration is loaded
+  2. If running in a specific environment (e.g., `development`), the override for that environment is deep-merged
+  3. Environment-specific settings take precedence over base settings
+  4. Only specified fields are overridden — others inherit from base config
+  
+  In the example above:
+  - **Development**: Uses SQLite with a local file
+  - **Staging**: Uses Postgres with reduced connection pool
+  - **Production**: Uses base Postgres config with full pool size
+</Accordion>
+
+### Storage Overrides
+
+Use different storage backends per environment:
+
+```yaml
+# storage/storage.yaml
+adapter: "s3"
+
+config:
+  bucket: ${S3_BUCKET}
+  region: ${S3_REGION}
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  ssl: true
+
+environment_overrides:
+  development:
+    adapter: "local"
+    config:
+      path: "./data/storage"
+
+  staging:
+    adapter: "s3"
+    config:
+      bucket: ${STAGING_S3_BUCKET}
+```
+
+<Note>
+**Development**: Uses local filesystem for fast iteration
+
+**Staging**: Uses dedicated staging S3 bucket
+
+**Production**: Uses base S3 configuration
+</Note>
+
+### Messaging Overrides
+
+Use different email providers per environment:
+
+```yaml
+# messaging/messaging.yaml
+email:
+  enabled: true
+  provider: "resend"
+  config:
+    api_key: ${RESEND_API_KEY}
+    from: "hello@myapp.com"
+    from_name: "My App"
+
+environment_overrides:
+  production:
+    email:
+      provider: "ses"
+      config:
+        access_key: ${AWS_SES_ACCESS_KEY}
+        secret_key: ${AWS_SES_SECRET_KEY}
+        region: "eu-west-1"
+        from: "hello@myapp.com"
+```
+
+## Environment Variables
+
+Each environment can have its own set of environment variables:
+
+### Instance Level
+
+```bash
+# .env (instance root)
+APPLAD_SECRET=...
+OTEL_ENDPOINT=...
+```
+
+### Organization Level
+
+```bash
+# orgs/acme-corp/.env
+ORG_SPECIFIC_VAR=...
+```
+
+### Project Level
+
+```bash
+# orgs/acme-corp/mobile-app/.env
+DATABASE_URL=postgres://user:pass@localhost:5432/dev
+STAGING_DATABASE_URL=postgres://user:pass@staging.db:5432/staging
+S3_BUCKET=my-app-production
+STAGING_S3_BUCKET=my-app-staging
+```
+
+<Note>
+Applad auto-generates `.env.example` files with annotations showing which config files reference each variable and which environment they're used in.
+</Note>
+
+## Running Specific Environments
+
+Deploy to a specific environment:
+
+```bash
+# Run development (default)
+applad up
+
+# Run staging
+applad up --env staging
+
+# Run production
+applad up --env production
+```
+
+## Feature Flags Per Environment
+
+Feature flags can have different values per environment:
+
+```yaml
+# flags/new-dashboard.yaml
+key: "new-dashboard"
+type: "boolean"
+default: false
+description: "New dashboard UI redesign"
+
+environments:
+  development: true
+  staging: true
+  production: false
+```
+
+<Accordion title="Multivariate Flags">
+  A/B testing flags can have different variants per environment:
+  
+  ```yaml
+  key: "checkout-flow"
+  type: "multivariate"
+  default: "control"
+  variants: ["control", "variant-a", "variant-b"]
+  
+  environments:
+    development: "variant-a"
+    staging: "control"
+    production: "control"
+  ```
+</Accordion>
+
+## Cloud Adapters Per Environment
+
+Cloud resources can be environment-specific:
+
+```yaml
+# project.yaml
+environments:
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+    
+    cloud_adapters:
+      - provider: "aws"
+        region: "eu-west-1"
+        credentials: "aws-production"
+        services:
+          - s3
+          - ses
+          - rds
+```
+
+<Note>
+Development typically has no cloud adapters (uses local resources), while staging and production use cloud services.
+</Note>
+
+## Observability Per Environment
+
+Configure different logging levels and sampling rates:
+
+```yaml
+# observability/observability.yaml
+logging:
+  level: "info"
+  structured: true
+
+tracing:
+  enabled: true
+  sampling_rate: 0.1
+
+environment_overrides:
+  development:
+    logging:
+      level: "debug"
+    tracing:
+      sampling_rate: 1.0
+  
+  production:
+    logging:
+      level: "warn"
+    tracing:
+      sampling_rate: 0.05
+```
+
+## Environment-Specific Permissions
+
+Some permissions are scoped to specific environments:
+
+```yaml
+# org.yaml roles
+- name: "developer"
+  permissions:
+    - "db:migrate:staging"
+    - "db:shell:development"
+    - "infrastructure:apply:development"
+    - "infrastructure:apply:staging"
+    # No infrastructure:apply:production
+```
+
+This allows developers to apply infrastructure changes to dev and staging, but not production.
+
+## Best Practices
+
+<Accordion title="Use Local Resources in Development">
+  Configure development to use local resources (SQLite, local storage) for fast iteration without cloud dependencies:
+  
+  ```yaml
+  environment_overrides:
+    development:
+      primary:
+        adapter: "sqlite"
+        path: "./data/dev.db"
+  ```
+</Accordion>
+
+<Accordion title="Match Staging to Production">
+  Keep staging as close to production as possible to catch issues before they reach users. Use the same adapters and providers, but with dedicated staging resources:
+  
+  ```yaml
+  environment_overrides:
+    staging:
+      primary:
+        adapter: "postgres"  # Same as production
+        url: ${STAGING_DATABASE_URL}  # But different database
+        pool:
+          max: 5  # Can be smaller
+  ```
+</Accordion>
+
+<Accordion title="Use Environment-Specific Secrets">
+  Never share secrets between environments. Use different API keys, database passwords, and credentials for each environment:
+  
+  ```bash
+  # Development
+  DATABASE_URL=postgres://dev:devpass@localhost:5432/dev
+  
+  # Staging
+  STAGING_DATABASE_URL=postgres://staging:stagingpass@staging.db:5432/staging
+  
+  # Production
+  DATABASE_URL=postgres://prod:prodpass@prod.db:5432/prod
+  ```
+</Accordion>
+
+<Accordion title="Progressive Rollouts">
+  Test features in development, then staging, then production:
+  
+  ```yaml
+  # flags/new-feature.yaml
+  environments:
+    development: true   # Enable immediately
+    staging: true       # Enable after dev testing
+    production: false   # Enable after staging validation
+  ```
+</Accordion>
+
+## Complete Example
+
+Here's a complete example showing environment overrides across multiple systems:
+
+```yaml
+# project.yaml
+environments:
+  - name: "development"
+    url: "http://localhost:8080"
+    infrastructure:
+      type: "local"
+
+  - name: "staging"
+    url: "https://staging-api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "staging.acme-corp.com"
+
+  - name: "production"
+    url: "https://api.myapp.com"
+    infrastructure:
+      type: "vps"
+      host: "prod-01.acme-corp.com"
+    cloud_adapters:
+      - provider: "aws"
+        region: "eu-west-1"
+        credentials: "aws-production"
+        services: [s3, ses]
+```
+
+```yaml
+# database/database.yaml
+connections:
+  - id: "primary"
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+
+environment_overrides:
+  development:
+    primary:
+      adapter: "sqlite"
+      path: "./data/dev.db"
+  staging:
+    primary:
+      url: ${STAGING_DATABASE_URL}
+```
+
+```yaml
+# storage/storage.yaml
+adapter: "s3"
+config:
+  bucket: ${S3_BUCKET}
+
+environment_overrides:
+  development:
+    adapter: "local"
+    config:
+      path: "./data/storage"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database" icon="database" href="/database/overview">
+    Configure database connections and migrations
+  </Card>
+  <Card title="Storage" icon="hard-drive" href="/storage/overview">
+    Set up file storage buckets
+  </Card>
+  <Card title="Functions" icon="function" href="/functions/overview">
+    Deploy serverless functions
+  </Card>
+  <Card title="Deployments" icon="rocket" href="/deployments/overview">
+    Configure deployment pipelines
+  </Card>
+</CardGroup>

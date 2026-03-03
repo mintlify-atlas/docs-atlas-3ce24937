@@ -1,0 +1,233 @@
+---
+title: "Local Development"
+description: "Run Applad locally with Docker Compose for production-equivalent development environments"
+---
+
+## Overview
+
+Applad runs locally using Docker Compose — the same Docker Compose it uses on VPS targets. This means your local environment is a 1:1 mirror of staging and production. No "works on my machine" problems.
+
+You only need Docker installed. The same containers, the same Dart SDK version, the same OS libraries run everywhere.
+
+## Prerequisites
+
+- Docker installed and running
+- A cloned Applad project with `applad.yaml`
+
+## Starting Your Local Environment
+
+A developer runs a single command to get a full production-equivalent stack:
+
+```bash
+applad up
+```
+
+On first run, Applad will:
+1. Detect an uninitialised database
+2. Run bootstrap inline
+3. Synthesize a `docker-compose.yml` from your project config
+4. Start all services
+
+<Note>
+**First run?** You'll be prompted for instance URL, first owner's email, SSH public key path, and organisation name. Bootstrap runs once and permanently closes.
+</Note>
+
+## Environment Configuration
+
+### Setting Up `.env`
+
+Copy the auto-generated example file:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the required variables. Every `${VAR_NAME}` reference across your config tree is automatically extracted and annotated in `.env.example`:
+
+```bash .env.example
+# Database connection string
+# Used by: database/database.yaml
+# Format: postgresql://user:pass@host:port/db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/applad_dev
+
+# Stripe API key (test mode)
+# Used by: functions/process-payment.yaml
+# Production: set via applad secrets set STRIPE_SECRET
+STRIPE_SECRET=sk_test_...
+
+# S3-compatible storage endpoint
+# Used by: storage/storage.yaml
+# Format: https://endpoint-url
+S3_ENDPOINT=http://localhost:9000
+```
+
+<Warning>
+`.env` files are explicitly development-only. `applad up --env staging` and `applad up --env production` will warn if a `.env` file is detected as the source of secrets.
+</Warning>
+
+## Local Runtime Model
+
+Applad uses Docker Compose locally with:
+
+- **SQLite or Postgres** — depending on your `database/database.yaml` config
+- **Local filesystem storage** — can be switched to S3/R2 without code changes
+- **All services containerized** — functions, workers, admin UI
+- **Caddy for SSL** — even locally, with self-signed certs
+
+### What's Running
+
+Check service status:
+
+```bash
+docker compose ps
+```
+
+View logs for a specific service:
+
+```bash
+docker logs applad-functions-1
+```
+
+Execute commands in a running container:
+
+```bash
+docker exec -it applad-db-1 psql -U postgres
+```
+
+<Info>
+Everything is inspectable with standard Docker tooling. No Applad-proprietary runtime primitives.
+</Info>
+
+## Development Workflow
+
+### Watch Mode
+
+For active development, use watch mode to auto-reconcile on every config change:
+
+```bash
+applad up --watch
+```
+
+Applad watches the config tree and automatically reconciles whenever you save a file.
+
+### Dry Run Before Applying
+
+Always preview changes before applying:
+
+```bash
+applad up --dry-run --diff
+```
+
+Shows:
+- Every service that would start or restart
+- Every config change
+- Every migration that would run
+- Full delta between current and desired state
+
+### Selective Reconciliation
+
+Reconcile only specific namespaces:
+
+```bash
+# Only database changes
+applad up --only database
+
+# Only functions and messaging
+applad up --only functions,messaging
+
+# Everything except deployments
+applad up --skip deployments
+```
+
+## Environment Parity
+
+Local is production from day one. The same Docker Compose model that runs on your Hetzner VPS runs on your MacBook.
+
+**The practical consequences:**
+
+- Onboarding is `applad up` — any developer on any machine gets a full stack immediately
+- No runtime surprises on deploy — you've been running production containers locally
+- Debugging uses standard tools — `docker logs`, `docker exec`, `docker compose ps`
+
+## Switching Storage Adapters
+
+Your application code never changes when switching adapters. Only config:
+
+<CodeGroup>
+
+```yaml storage/storage.yaml (Local Filesystem)
+adapter: "filesystem"
+config:
+  base_path: "/var/applad/storage"
+```
+
+```yaml storage/storage.yaml (Local MinIO)
+adapter: "s3"
+config:
+  endpoint: ${S3_ENDPOINT}
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  bucket: "applad-local"
+```
+
+</CodeGroup>
+
+Run `applad up` and Applad reconciles to the new adapter. No code changes required.
+
+## Onboarding New Developers
+
+A new developer joining your project:
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and fill in values
+3. Run `applad login` to register their SSH key
+4. Run `applad up` to start the full stack
+
+Local environments run immediately — no approval needed. Shared environments require an administrator to run `applad access approve`.
+
+## Troubleshooting
+
+### Reset Local Environment
+
+Stop all services and remove volumes:
+
+```bash
+docker compose down -v
+```
+
+Start fresh:
+
+```bash
+applad up
+```
+
+### Check What Changed
+
+See what drifted from your config:
+
+```bash
+applad status --drift
+```
+
+Shows exactly what has drifted without changing anything.
+
+### Increase Verbosity
+
+Default output is quiet — just the recap. Add verbosity for debugging:
+
+```bash
+# Per-resource status lines
+applad up -v
+
+# Synthesized Docker Compose and SSH commands
+applad up -vv
+
+# Full request/response detail
+applad up -vvv
+```
+
+## Next Steps
+
+- Deploy to a [VPS environment](/deployment/vps)
+- Add [cloud adapters](/deployment/cloud-adapters) for storage or database
+- Learn about [Docker Compose synthesis](/deployment/docker-compose)

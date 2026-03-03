@@ -1,0 +1,321 @@
+---
+title: DeploymentConfig
+description: Deployment configuration (deployments/*.yaml)
+---
+
+## Overview
+
+`DeploymentConfig` defines deployment platform settings, build commands, credentials, and environment-specific variables. Configuration is stored in `deployments/*.yaml` files.
+
+## Class Definition
+
+```dart
+final class DeploymentConfig {
+  const DeploymentConfig({
+    required this.name,
+    required this.platform,
+    this.buildCommand,
+    this.credentialsRef,
+    this.region,
+    this.environment = const {},
+    this.source,
+  });
+  
+  factory DeploymentConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="name" type="String" required>
+  Deployment name/identifier
+</ParamField>
+
+<ParamField path="platform" type="String" required>
+  Deployment platform: `"fly"`, `"railway"`, `"render"`, `"aws"`, `"gcp"`, `"azure"`, `"ssh"`
+</ParamField>
+
+<ParamField path="buildCommand" type="String?">
+  Custom build command to run before deployment
+</ParamField>
+
+<ParamField path="credentialsRef" type="SecretRef?">
+  Reference to deployment credentials secret
+</ParamField>
+
+<ParamField path="region" type="String?">
+  Deployment region/zone
+</ParamField>
+
+<ParamField path="environment" type="Map<String, String>" default="{}">
+  Environment variables for deployment
+</ParamField>
+
+<ParamField path="source" type="SourceBlock?">
+  Source code configuration
+</ParamField>
+
+## Usage
+
+### Fly.io Deployment
+
+```yaml
+# deployments/production.yaml
+name: production
+platform: fly
+region: iad  # US East
+
+environment:
+  LOG_LEVEL: warn
+  CORS_ORIGIN: https://myapp.com
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = DeploymentConfig.fromMap(yamlData);
+print('Deployment: ${config.name}');
+print('Platform: ${config.platform}');
+print('Region: ${config.region}');
+
+config.environment.forEach((key, value) {
+  print('  $key: $value');
+});
+```
+
+### Railway Deployment
+
+```yaml
+name: staging
+platform: railway
+
+environment:
+  LOG_LEVEL: info
+  DATABASE_URL: "{{secrets.railway_db_url}}"
+```
+
+### AWS Deployment
+
+```yaml
+name: production
+platform: aws
+region: us-east-1
+
+credentials: "{{secrets.aws_credentials}}"
+
+environment:
+  AWS_S3_BUCKET: myapp-production
+  AWS_CLOUDFRONT_DOMAIN: d123456.cloudfront.net
+```
+
+```dart
+final config = DeploymentConfig.fromMap(yamlData);
+
+if (config.credentialsRef != null) {
+  print('Using credentials: ${config.credentialsRef!.key}');
+}
+```
+
+### Custom SSH Server
+
+```yaml
+name: production
+platform: ssh
+
+infrastructure:
+  host: api.myapp.com
+  user: deploy
+  port: 22
+  key: "{{secrets.ssh_deploy_key}}"
+
+build:
+  command: dart compile exe bin/server.dart -o bin/server
+
+environment:
+  PORT: "8080"
+  DATABASE_URL: "{{secrets.prod_db_url}}"
+```
+
+```dart
+final config = DeploymentConfig.fromMap(yamlData);
+
+if (config.buildCommand != null) {
+  print('Build command: ${config.buildCommand}');
+}
+```
+
+### Google Cloud Platform
+
+```yaml
+name: production
+platform: gcp
+region: us-central1
+
+credentials: "{{secrets.gcp_service_account}}"
+
+environment:
+  GCP_PROJECT_ID: my-project
+  GCP_STORAGE_BUCKET: my-bucket
+```
+
+### Azure Deployment
+
+```yaml
+name: production
+platform: azure
+region: eastus
+
+credentials: "{{secrets.azure_credentials}}"
+
+environment:
+  AZURE_STORAGE_ACCOUNT: mystorageaccount
+  AZURE_STORAGE_CONTAINER: uploads
+```
+
+### Render Deployment
+
+```yaml
+name: production
+platform: render
+
+environment:
+  LOG_LEVEL: error
+  RENDER_SERVICE_NAME: myapp-api
+```
+
+### With Custom Build
+
+```yaml
+name: production
+platform: fly
+region: iad
+
+build:
+  command: |
+    dart pub get
+    dart compile exe bin/server.dart -o bin/server
+    dart run bin/generate_assets.dart
+
+environment:
+  RELEASE_VERSION: "{{version}}"
+  BUILD_TIME: "{{timestamp}}"
+```
+
+### Multi-Region Deployment
+
+```yaml
+name: global-production
+platform: fly
+
+regions:
+  - iad  # US East
+  - lhr  # London
+  - nrt  # Tokyo
+  - syd  # Sydney
+
+environment:
+  LOG_LEVEL: warn
+  ENABLE_METRICS: "true"
+```
+
+### With Source Repository
+
+```yaml
+name: production
+platform: railway
+
+source:
+  type: git
+  url: https://github.com/myorg/myapp.git
+  branch: main
+  path: server
+
+environment:
+  ENVIRONMENT: production
+```
+
+```dart
+final config = DeploymentConfig.fromMap(yamlData);
+
+if (config.source != null) {
+  print('Source type: ${config.source!.type}');
+  // Access source configuration
+}
+```
+
+### Creating Programmatically
+
+```dart
+final config = DeploymentConfig(
+  name: 'production',
+  platform: 'fly',
+  region: 'iad',
+  buildCommand: 'dart compile exe bin/server.dart',
+  credentialsRef: SecretRef.parse('{{secrets.fly_token}}'),
+  environment: {
+    'LOG_LEVEL': 'error',
+    'DATABASE_URL': '{{secrets.prod_db_url}}',
+    'STORAGE_BUCKET': 'prod-uploads',
+  },
+);
+
+final json = config.toJson();
+```
+
+## Deployment Platforms
+
+### Fly.io
+- **Regions**: Global edge network
+- **Best for**: Low-latency global apps
+- **Config**: Simple YAML or Dockerfile
+
+### Railway
+- **Regions**: US, Europe
+- **Best for**: Quick deployments, databases
+- **Config**: Git-based auto-deploy
+
+### Render
+- **Regions**: US, Europe, Asia
+- **Best for**: Web services, static sites
+- **Config**: YAML configuration
+
+### AWS (Amazon Web Services)
+- **Regions**: Global
+- **Best for**: Enterprise, scalable infrastructure
+- **Config**: Requires credentials, complex setup
+
+### GCP (Google Cloud Platform)
+- **Regions**: Global
+- **Best for**: Google services integration
+- **Config**: Service account credentials
+
+### Azure
+- **Regions**: Global
+- **Best for**: Microsoft ecosystem
+- **Config**: Azure credentials
+
+### SSH (Custom Server)
+- **Regions**: Your infrastructure
+- **Best for**: Self-hosted, full control
+- **Config**: SSH credentials, manual setup
+
+## Common Regions
+
+### Fly.io
+- `iad` - Washington D.C., USA
+- `lax` - Los Angeles, USA
+- `lhr` - London, UK
+- `fra` - Frankfurt, Germany
+- `nrt` - Tokyo, Japan
+- `syd` - Sydney, Australia
+
+### AWS
+- `us-east-1` - Virginia
+- `us-west-2` - Oregon
+- `eu-west-1` - Ireland
+- `ap-southeast-1` - Singapore
+
+## Source Location
+
+`packages/applad_core/lib/src/config/deployment_config.dart:8`

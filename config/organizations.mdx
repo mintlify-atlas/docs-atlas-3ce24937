@@ -1,0 +1,444 @@
+---
+title: Organization Configuration
+description: Define organizations, roles, permissions, and SSH keys with org.yaml
+---
+
+The `org.yaml` file lives at `orgs/<org-name>/org.yaml` and defines organization-level settings. Any directory under `orgs/` containing an `org.yaml` file is automatically recognized as an organization.
+
+## Basic Structure
+
+```yaml
+id: "acme-corp"
+name: "Acme Corp"
+description: "Main organization"
+```
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the organization (used in URLs and references)
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Human-readable organization name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional description of the organization
+</ParamField>
+
+## Roles and Permissions
+
+<Note>
+**Important**: Role definitions in `org.yaml` are **declarative documentation**. They describe the intended shape of each role and serve as defaults when a new member is granted a role.
+
+Actual access grants live in the admin database and are managed via `applad access` commands or the admin UI. Editing this file does not change what any developer can actually do — only `applad access` commands do that.
+</Note>
+
+Define roles with associated permissions:
+
+```yaml
+roles:
+  - name: "owner"
+    description: "Full access to everything including billing and org deletion"
+    permissions: ["*"]
+
+  - name: "admin"
+    description: "Full project access, member management, no billing"
+    permissions:
+      - "projects:*"
+      - "config:*"
+      - "infrastructure:apply:*"
+      - "schema:*"
+      - "schema:destructive"
+      - "permissions:write"
+      - "access:manage"
+      - "functions:*"
+      - "deployments:*"
+      - "db:*"
+      - "members:invite"
+      - "members:remove"
+```
+
+### Built-in Roles
+
+<Accordion title="Owner">
+  Full administrative access including billing and organization deletion.
+  
+  ```yaml
+  - name: "owner"
+    description: "Full access to everything including billing and org deletion"
+    permissions: ["*"]
+  ```
+</Accordion>
+
+<Accordion title="Admin">
+  Full project access and member management, but no billing controls.
+  
+  ```yaml
+  - name: "admin"
+    description: "Full project access, member management, no billing"
+    permissions:
+      - "projects:*"
+      - "config:*"
+      - "infrastructure:apply:*"
+      - "schema:*"
+      - "schema:destructive"
+      - "permissions:write"
+      - "access:manage"
+      - "functions:*"
+      - "deployments:*"
+      - "db:*"
+      - "tables:*"
+      - "storage:*"
+      - "flags:*"
+      - "messaging:*"
+      - "analytics:*"
+      - "security:*"
+      - "members:invite"
+      - "members:remove"
+  ```
+</Accordion>
+
+<Accordion title="Developer">
+  Full read/write on config and code. Cannot apply to production or manage access.
+  
+  ```yaml
+  - name: "developer"
+    description: "Full read/write on config and code. Cannot apply to production or manage access."
+    permissions:
+      - "projects:read"
+      - "config:read"
+      - "config:write"
+      - "schema:read"
+      - "schema:write"
+      - "tables:read"
+      - "tables:write"
+      - "functions:*"
+      - "deployments:run"
+      - "deployments:logs"
+      - "db:migrate:staging"
+      - "db:shell:development"
+      - "storage:read"
+      - "storage:write"
+      - "flags:read"
+      - "flags:write"
+      - "messaging:read"
+      - "messaging:write"
+      - "analytics:read"
+      - "logs:read"
+      - "infrastructure:apply:development"
+      - "infrastructure:apply:staging"
+  ```
+  
+  <Note>
+  Developers cannot:
+  - Apply infrastructure changes to production
+  - Perform destructive schema operations
+  - Write permissions or manage access
+  </Note>
+</Accordion>
+
+<Accordion title="Contractor">
+  Scoped read/write access. No infrastructure access. No production.
+  
+  ```yaml
+  - name: "contractor"
+    description: "Scoped read/write. No infrastructure access. No production."
+    permissions:
+      - "config:read"
+      - "functions:deploy"
+      - "functions:logs"
+      - "functions:invoke"
+      - "deployments:logs"
+      - "logs:read"
+  ```
+</Accordion>
+
+<Accordion title="Viewer">
+  Read-only access across everything.
+  
+  ```yaml
+  - name: "viewer"
+    description: "Read-only across everything"
+    permissions: ["*:read"]
+  ```
+</Accordion>
+
+<Accordion title="CI">
+  Scoped automation key for deployment and function pipelines only.
+  
+  ```yaml
+  - name: "ci"
+    description: "Scoped automation key — deployment and function pipelines only"
+    permissions:
+      - "deployments:run"
+      - "functions:deploy"
+      - "infrastructure:apply:staging"
+      - "infrastructure:apply:production"
+  ```
+</Accordion>
+
+### Permission Format
+
+Permissions follow the format: `<resource>:<action>:<scope>`
+
+- `*` - All permissions
+- `*:read` - Read-only on all resources
+- `projects:*` - All actions on projects
+- `db:migrate:staging` - Migrate database in staging only
+- `infrastructure:apply:production` - Apply infrastructure to production
+
+## SSH Keys
+
+Public keys only — private keys never leave the developer's machine. Key fingerprints attribute every CLI, UI, and Applad Instruct action in the audit trail.
+
+```yaml
+ssh_keys:
+  - label: "alice@macbook-pro"
+    fingerprint: "SHA256:abc123..."
+    identity: "alice@acme-corp"
+    role: "admin"
+    scopes: ["*"]
+
+  - label: "bob@workstation"
+    fingerprint: "SHA256:def456..."
+    identity: "bob@acme-corp"
+    role: "developer"
+    scopes:
+      - "config:*"
+      - "functions:*"
+      - "deployments:run"
+      - "deployments:logs"
+      - "db:migrate:staging"
+      - "db:shell:development"
+      - "tables:*"
+      - "infrastructure:apply:development"
+      - "infrastructure:apply:staging"
+
+  - label: "ci-github-actions"
+    fingerprint: "SHA256:ghi789..."
+    identity: "ci@acme-corp"
+    role: "ci"
+    scopes:
+      - "deployments:run"
+      - "functions:deploy"
+      - "infrastructure:apply:staging"
+      - "infrastructure:apply:production"
+```
+
+<ParamField path="ssh_keys[].label" type="string" required>
+  Human-readable label for the key (e.g., `"alice@macbook-pro"`)
+</ParamField>
+
+<ParamField path="ssh_keys[].fingerprint" type="string" required>
+  SHA256 fingerprint of the public key
+</ParamField>
+
+<ParamField path="ssh_keys[].identity" type="string" required>
+  Email or identifier of the key owner
+</ParamField>
+
+<ParamField path="ssh_keys[].role" type="string" required>
+  Role assigned to this key (must match a defined role)
+</ParamField>
+
+<ParamField path="ssh_keys[].scopes" type="array" required>
+  Maximum permissions this key can exercise. Effective permission = intersection of role grants AND key scopes.
+</ParamField>
+
+<Note>
+**Scope Intersection**: A key's effective permissions are the intersection of:
+1. Role grants from the admin database
+2. Key scopes defined in `org.yaml`
+
+This allows you to grant a developer role but limit specific keys to subset permissions.
+</Note>
+
+### Managing SSH Keys
+
+This file is updated automatically by:
+
+```bash
+# Add a new key
+applad orgs keys add
+
+# Revoke a key
+applad orgs keys revoke <fingerprint>
+```
+
+<Warning>
+Do not edit the `ssh_keys` section manually. Use `applad orgs keys` commands instead.
+</Warning>
+
+## Security Settings
+
+Organization-level security configuration:
+
+```yaml
+security:
+  mfa:
+    required: true
+    methods: ["totp", "webauthn"]
+
+  data_residency:
+    region: "eu-west-1"
+
+  ip_allowlist:
+    enabled: false
+
+  session:
+    max_duration: 28800
+    idle_timeout: 3600
+```
+
+<Accordion title="MFA Configuration">
+  <ParamField path="security.mfa.required" type="boolean" default="false">
+    Require MFA for all organization members
+  </ParamField>
+  
+  <ParamField path="security.mfa.methods" type="array">
+    Allowed MFA methods: `"totp"`, `"webauthn"`
+  </ParamField>
+</Accordion>
+
+<Accordion title="Data Residency">
+  <ParamField path="security.data_residency.region" type="string">
+    Region where organization data must reside (e.g., `"eu-west-1"`, `"us-east-1"`)
+  </ParamField>
+</Accordion>
+
+<Accordion title="IP Allowlist">
+  <ParamField path="security.ip_allowlist.enabled" type="boolean" default="false">
+    Enable IP-based access restrictions
+  </ParamField>
+  
+  <ParamField path="security.ip_allowlist.addresses" type="array">
+    List of allowed IP addresses or CIDR ranges
+  </ParamField>
+</Accordion>
+
+<Accordion title="Session Configuration">
+  <ParamField path="security.session.max_duration" type="integer" default="28800">
+    Maximum session duration in seconds (default: 8 hours)
+  </ParamField>
+  
+  <ParamField path="security.session.idle_timeout" type="integer" default="3600">
+    Idle timeout in seconds (default: 1 hour)
+  </ParamField>
+</Accordion>
+
+## Billing
+
+<Note>
+Billing is managed via the admin UI and Applad dashboard, not through config files. Changing your plan never requires a git commit or a config deploy.
+</Note>
+
+## Complete Example
+
+```yaml
+id: "acme-corp"
+name: "Acme Corp"
+description: "Main organization"
+
+roles:
+  - name: "owner"
+    description: "Full access to everything including billing and org deletion"
+    permissions: ["*"]
+
+  - name: "admin"
+    description: "Full project access, member management, no billing"
+    permissions:
+      - "projects:*"
+      - "config:*"
+      - "infrastructure:apply:*"
+      - "schema:*"
+      - "schema:destructive"
+      - "permissions:write"
+      - "access:manage"
+      - "functions:*"
+      - "deployments:*"
+      - "db:*"
+      - "tables:*"
+      - "storage:*"
+      - "flags:*"
+      - "messaging:*"
+      - "analytics:*"
+      - "security:*"
+      - "members:invite"
+      - "members:remove"
+
+  - name: "developer"
+    description: "Full read/write on config and code. Cannot apply to production or manage access."
+    permissions:
+      - "projects:read"
+      - "config:read"
+      - "config:write"
+      - "schema:read"
+      - "schema:write"
+      - "tables:read"
+      - "tables:write"
+      - "functions:*"
+      - "deployments:run"
+      - "deployments:logs"
+      - "db:migrate:staging"
+      - "db:shell:development"
+      - "storage:read"
+      - "storage:write"
+      - "flags:read"
+      - "flags:write"
+      - "messaging:read"
+      - "messaging:write"
+      - "analytics:read"
+      - "logs:read"
+      - "infrastructure:apply:development"
+      - "infrastructure:apply:staging"
+
+  - name: "viewer"
+    description: "Read-only across everything"
+    permissions: ["*:read"]
+
+  - name: "ci"
+    description: "Scoped automation key — deployment and function pipelines only"
+    permissions:
+      - "deployments:run"
+      - "functions:deploy"
+      - "infrastructure:apply:staging"
+      - "infrastructure:apply:production"
+
+ssh_keys:
+  - label: "alice@macbook-pro"
+    fingerprint: "SHA256:abc123..."
+    identity: "alice@acme-corp"
+    role: "admin"
+    scopes: ["*"]
+
+  - label: "ci-github-actions"
+    fingerprint: "SHA256:ghi789..."
+    identity: "ci@acme-corp"
+    role: "ci"
+    scopes:
+      - "deployments:run"
+      - "functions:deploy"
+      - "infrastructure:apply:staging"
+      - "infrastructure:apply:production"
+
+security:
+  mfa:
+    required: true
+    methods: ["totp", "webauthn"]
+
+  data_residency:
+    region: "eu-west-1"
+
+  ip_allowlist:
+    enabled: false
+
+  session:
+    max_duration: 28800
+    idle_timeout: 3600
+```
+
+## Next Steps
+
+<Card title="Projects" icon="folder" href="/config/projects">
+  Define projects within your organization
+</Card>

@@ -1,0 +1,116 @@
+---
+title: applad functions
+description: Manage serverless functions and their deployments
+---
+
+## Overview
+
+Manages serverless functions in your Applad project. Each function is defined by a single YAML file in `functions/`. The YAML file points to the function code via a source block — local path, GitHub repo, or container registry. Applad fetches from source at deploy time. Functions run in isolated Docker containers.
+
+## Commands
+
+### applad functions list
+
+Lists all functions defined in the active project's `functions/` directory, along with their runtime, source type, trigger type, and deployment status.
+
+```bash
+applad functions list
+```
+
+### applad functions deploy
+
+Deploys a specific function. Fetches the code from the source defined in the function's YAML file (clones the repo, copies the local path, or pulls the registry image), builds the container, scans it for vulnerabilities, and deploys it to the configured infrastructure. The previous version keeps running until the new one is healthy.
+
+```bash
+applad functions deploy <name>
+```
+
+**Deploy all functions:**
+```bash
+applad functions deploy --all
+```
+
+Deploys all functions defined in the active project's `functions/` directory in parallel. Useful after a large change or when setting up a project for the first time.
+
+**Example:**
+```bash
+applad functions deploy send-welcome-email
+```
+
+### applad functions logs
+
+Tails the execution logs for a specific function — every invocation, its duration, its output, and any errors. Streams new logs in real time as the function executes.
+
+```bash
+applad functions logs <name>
+```
+
+**Example:**
+```bash
+applad functions logs process-payment
+```
+
+### applad functions invoke
+
+Invokes a function immediately, outside of its normal trigger (HTTP, event, schedule). Useful for testing a function manually without waiting for its trigger condition. Output and any errors are printed to the terminal.
+
+```bash
+applad functions invoke <name>
+```
+
+**With JSON payload:**
+```bash
+applad functions invoke <name> --data '{"key":"value"}'
+```
+
+Passes a JSON payload as the function's input. The function receives this as its event/request body.
+
+**Example:**
+```bash
+applad functions invoke process-order --data '{"orderId":"12345"}'
+```
+
+### applad functions build
+
+Fetches the function source and builds the container image without deploying it. Useful for catching build errors before a real deployment, or for pre-building images in a CI step that precedes the actual deploy.
+
+```bash
+applad functions build <name>
+```
+
+**Example:**
+```bash
+applad functions build data-processor
+```
+
+### applad functions scan
+
+Scans the built container image for a function against known vulnerability databases. Reports findings by severity. This runs automatically as part of `applad functions deploy` — use this to scan a built image without deploying it.
+
+```bash
+applad functions scan <name>
+```
+
+**Example:**
+```bash
+applad functions scan api-handler
+```
+
+### applad functions delete
+
+Removes a function from the active project. Stops the running container, removes it from the infrastructure, and deletes the function's YAML file. Does not delete the function's source code — only the Applad config and running container.
+
+```bash
+applad functions delete <name>
+```
+
+**Example:**
+```bash
+applad functions delete deprecated-handler
+```
+
+## Related Commands
+
+- [applad deploy](/cli/deploy) - Deployment pipeline management
+- [applad workflows](/cli/workflows) - Multi-step automation workflows
+- [Functions guide](/guides/functions) - Learn how to define and deploy serverless functions

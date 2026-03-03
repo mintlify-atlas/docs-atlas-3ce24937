@@ -1,0 +1,397 @@
+---
+title: Using The Lad (AI Assistant)
+description: Work with Applad's AI-powered infrastructure assistant using natural language instructions
+---
+
+## Overview
+
+"The Lad" is Applad's AI-powered infrastructure assistant, accessed through `applad instruct`. Give instructions in plain language, and the Lad translates them into config changes, migrations, and infrastructure operations.
+
+Every instruction is attributed to your SSH key identity in the audit trail. The exact prompt is recorded alongside every change — AI-assisted changes are always traceable to the human who authorized them.
+
+## Basic Usage
+
+```bash
+applad instruct "add a posts table with title, body, and author_id"
+```
+
+The Lad:
+1. Analyzes the instruction
+2. Creates `database/tables/posts.yaml` with appropriate fields
+3. Generates a migration file
+4. Shows what it will do (always `--dry-run` first)
+5. Asks for confirmation
+6. Applies changes
+7. Records the prompt in the audit trail
+
+## Configuration
+
+AI configuration lives in `applad.yaml`:
+
+```yaml applad.yaml
+ai:
+  enabled: true
+  provider: "anthropic"  # anthropic | openai | google | ollama
+  model: "claude-sonnet-4-6"
+
+  features:
+    scaffolding: true
+    debugging: true
+    monitoring: true
+    migrations: true
+    infrastructure: true
+    security: true
+    dry_run: true
+```
+
+### Provider Configuration
+
+API keys are stored encrypted in the admin database, never in config files:
+
+```bash
+applad secrets set ANTHROPIC_API_KEY
+applad secrets set OPENAI_API_KEY
+```
+
+Switch providers through the admin UI or by updating `applad.yaml`:
+
+```yaml
+ai:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4-turbo"
+```
+
+## Common Tasks
+
+### Create Tables
+
+```bash
+applad instruct "add a users table with email, name, and role"
+```
+
+Generates:
+- `database/tables/users.yaml` with fields, indexes, and permissions
+- Migration file
+- Updates `.env.example` if new variables are needed
+
+### Add Fields to Existing Tables
+
+```bash
+applad instruct "add avatar_url field to users table"
+```
+
+Generates:
+- Migration to add the field
+- Updates table YAML definition
+
+### Create Functions
+
+```bash
+applad instruct "create a function to send welcome emails when users sign up"
+```
+
+Generates:
+- `functions/send-welcome-email.yaml` with event trigger on `auth.user.created`
+- Boilerplate function code in your preferred runtime
+- Shows where to place the code
+
+### Configure Storage
+
+```bash
+applad instruct "add a public avatars bucket that accepts images up to 5mb"
+```
+
+Generates:
+- `storage/buckets/avatars.yaml` with appropriate configuration
+- Permission rules
+
+### Set Up Deployments
+
+```bash
+applad instruct "create a web deployment for myapp.com using the main branch"
+```
+
+Generates:
+- `deployments/web.yaml` with domain, source, and build configuration
+- Security headers
+- SSL configuration
+
+### Add Feature Flags
+
+```bash
+applad instruct "create a feature flag for the new dashboard"
+```
+
+Generates:
+- `flags/new-dashboard.yaml` with boolean type
+- Per-environment defaults
+
+## Advanced Usage
+
+### Infrastructure Changes
+
+```bash
+applad instruct "add a staging environment using a VPS at staging.myapp.com"
+```
+
+Updates:
+- `project.yaml` with new environment definition
+- Infrastructure target configuration
+- Environment-specific overrides
+
+### Security Audits
+
+```bash
+applad instruct "audit the posts table permissions for security issues"
+```
+
+Analyzes:
+- Permission rules
+- Filter expressions
+- Potential security gaps
+- Suggests improvements
+
+### Debugging
+
+```bash
+applad instruct "why is the send-welcome-email function failing?"
+```
+
+Checks:
+- Recent function logs
+- Configuration
+- Environment variables
+- Common failure patterns
+- Suggests fixes
+
+### Migration Assistance
+
+```bash
+applad instruct "create a migration to add fulltext search to posts"
+```
+
+Generates:
+- Migration SQL
+- Down migration for rollback
+- Updates table YAML with fulltext index
+
+## Dry-Run Mode
+
+Always review before applying:
+
+```bash
+applad instruct --dry-run "add a comments table"
+```
+
+Shows:
+- Which files would be created or modified
+- Content of each file
+- Environment variables that would be added
+- Migrations that would be generated
+
+Nothing is written until you confirm.
+
+## Access Control
+
+The Lad respects your SSH key's permission scopes:
+
+```bash
+applad instruct "apply this change to production"
+```
+
+If your key lacks `infrastructure:apply:production` scope:
+
+```
+ERROR Instruction requires infrastructure:apply:production scope
+  Your key (SHA256:def456... bob@workstation) does not have this scope.
+  Ask an admin to grant it with:
+    applad access grant bob@acme-corp \
+      --scope "infrastructure:apply:production" \
+      --project mobile-app
+```
+
+## Audit Trail
+
+Every `applad instruct` action is recorded:
+
+```bash
+applad security events list --type instruct_action
+```
+
+Shows:
+- Exact prompt
+- SSH key identity
+- Files created or modified
+- When it happened
+- Success or failure
+
+## Multi-Step Instructions
+
+Complex instructions work across multiple resources:
+
+```bash
+applad instruct "create a blog feature with posts, comments, and categories tables, plus a function to send notifications when someone comments"
+```
+
+The Lad:
+1. Creates three table definitions
+2. Defines relations between tables
+3. Generates migrations
+4. Creates the notification function
+5. Sets up event trigger
+6. Shows the complete plan
+7. Asks for confirmation
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Be specific">
+    Vague: "add some auth stuff"
+    
+    Specific: "add email and Google OAuth providers to auth.yaml with MFA enabled"
+  </Accordion>
+
+  <Accordion title="Review before applying">
+    Always use `--dry-run` first for production changes:
+
+    ```bash
+    applad instruct --dry-run "migrate production to new schema"
+    ```
+  </Accordion>
+
+  <Accordion title="One task at a time">
+    Break complex changes into steps:
+
+    ```bash
+    applad instruct "add posts table"
+    # Review and apply
+    
+    applad instruct "add comments table with relation to posts"
+    # Review and apply
+    ```
+  </Accordion>
+
+  <Accordion title="Check the audit trail">
+    Review what the Lad has done:
+
+    ```bash
+    applad security events list --type instruct_action --since today
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example Workflows
+
+### Building a Feature
+
+```bash
+# 1. Create tables
+applad instruct "add a posts table with title, body, author_id, and status enum"
+
+# 2. Add storage
+applad instruct "create a post-images bucket for uploaded post images"
+
+# 3. Create function
+applad instruct "create a function to process post images on upload"
+
+# 4. Add feature flag
+applad instruct "create a feature flag for the new posts feature"
+
+# 5. Set up deployment
+applad instruct "add the posts feature to the web deployment"
+```
+
+### Debugging Production
+
+```bash
+# Check what's wrong
+applad instruct "why are users unable to upload avatars?"
+
+# Get logs
+applad instruct "show recent errors from the upload-avatar function"
+
+# Analyze config
+applad instruct "check if the avatars bucket permissions are correct"
+```
+
+### Infrastructure Changes
+
+```bash
+# Add environment
+applad instruct "add a staging environment on staging.myapp.com"
+
+# Configure cloud resources
+applad instruct "add S3 storage for production using eu-west-1"
+
+# Update deployment
+applad instruct "configure the web deployment to build on every push to main"
+```
+
+## Limitations
+
+The Lad cannot:
+- Execute arbitrary code
+- Access external systems without explicit configuration
+- Override SSH key permission scopes
+- Make changes without human confirmation (unless explicitly automated)
+- Perform destructive operations without `--dry-run` review
+
+## Disabling AI Features
+
+To disable the AI assistant:
+
+```yaml applad.yaml
+ai:
+  enabled: false
+```
+
+Or disable specific features:
+
+```yaml applad.yaml
+ai:
+  enabled: true
+  provider: "anthropic"
+  model: "claude-sonnet-4-6"
+
+  features:
+    scaffolding: true
+    debugging: true
+    monitoring: true
+    migrations: false      # Disable migration generation
+    infrastructure: false  # Disable infrastructure changes
+    security: true
+    dry_run: true
+```
+
+## Privacy and Data
+
+When using cloud AI providers:
+- Your config structure is sent to the AI provider
+- Actual secret values are never sent (only `${VAR}` references)
+- Prompts and responses are logged in your audit trail
+- You can use self-hosted models (Ollama) for full privacy
+
+### Self-Hosted AI
+
+```yaml applad.yaml
+ai:
+  enabled: true
+  provider: "ollama"
+  model: "llama2"
+  config:
+    endpoint: "http://localhost:11434"
+```
+
+No data leaves your infrastructure.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Command Reference" icon="terminal" href="/cli/overview">
+    Full CLI command reference
+  </Card>
+  <Card title="Project Setup" icon="rocket" href="/guides/project-setup">
+    Set up a new Applad project from scratch
+  </Card>
+</CardGroup>

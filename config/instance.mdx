@@ -1,0 +1,405 @@
+---
+title: Instance Configuration
+description: Configure your Applad instance with applad.yaml - the root configuration file
+---
+
+The `applad.yaml` file lives at your project root and defines instance-wide settings. It's the entry point for Applad's configuration tree.
+
+## Basic Structure
+
+```yaml
+version: "1.0"
+name: "my-applad-instance"
+description: "My Applad instance"
+
+instance:
+  url: "https://api.myapp.com"
+  region: "us-east-1"
+  secret: ${APPLAD_SECRET}
+```
+
+<ParamField path="version" type="string" required>
+  Configuration schema version. Currently `"1.0"`
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Human-readable name for your Applad instance
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional description of what this instance is for
+</ParamField>
+
+## Instance Settings
+
+The `instance` block defines core instance configuration:
+
+<ParamField path="instance.url" type="string" required>
+  Base URL where your instance will be accessible
+</ParamField>
+
+<ParamField path="instance.region" type="string">
+  Default cloud region for resources (e.g., `"us-east-1"`, `"eu-west-1"`)
+</ParamField>
+
+<ParamField path="instance.secret" type="string" required>
+  Secret key for signing tokens and encrypting data. Use `${APPLAD_SECRET}` and generate with:
+  ```bash
+  openssl rand -hex 32
+  ```
+</ParamField>
+
+## Feature Flags
+
+Enable or disable instance-wide features:
+
+```yaml
+instance:
+  features:
+    ui: true
+    api: true
+    graphql: true
+    realtime: true
+    storage: true
+    functions: true
+    deployments: true
+    workflows: true
+    flags: true
+    analytics: true
+    instruct: true
+    messaging: true
+```
+
+<Accordion title="Available Features">
+  <ParamField path="features.ui" type="boolean" default="true">
+    Enable the admin UI dashboard
+  </ParamField>
+  
+  <ParamField path="features.api" type="boolean" default="true">
+    Enable REST API generation
+  </ParamField>
+  
+  <ParamField path="features.graphql" type="boolean" default="true">
+    Enable GraphQL API generation
+  </ParamField>
+  
+  <ParamField path="features.realtime" type="boolean" default="true">
+    Enable real-time subscriptions
+  </ParamField>
+  
+  <ParamField path="features.storage" type="boolean" default="true">
+    Enable file storage system
+  </ParamField>
+  
+  <ParamField path="features.functions" type="boolean" default="true">
+    Enable serverless functions
+  </ParamField>
+  
+  <ParamField path="features.deployments" type="boolean" default="true">
+    Enable deployment pipelines
+  </ParamField>
+  
+  <ParamField path="features.workflows" type="boolean" default="true">
+    Enable workflow orchestration
+  </ParamField>
+  
+  <ParamField path="features.flags" type="boolean" default="true">
+    Enable feature flags
+  </ParamField>
+  
+  <ParamField path="features.analytics" type="boolean" default="true">
+    Enable analytics collection
+  </ParamField>
+  
+  <ParamField path="features.instruct" type="boolean" default="true">
+    Enable Applad Instruct (AI assistant)
+  </ParamField>
+  
+  <ParamField path="features.messaging" type="boolean" default="true">
+    Enable messaging system
+  </ParamField>
+</Accordion>
+
+## AI Configuration
+
+Powers Applad Instruct. API keys are stored encrypted in the admin database, never in config files.
+
+```yaml
+ai:
+  enabled: true
+  provider: "anthropic"
+  model: "claude-sonnet-4-6"
+
+  features:
+    scaffolding: true
+    debugging: true
+    monitoring: true
+    migrations: true
+    infrastructure: true
+    security: true
+    dry_run: true
+```
+
+<ParamField path="ai.enabled" type="boolean" default="true">
+  Enable AI-powered features
+</ParamField>
+
+<ParamField path="ai.provider" type="string" default="anthropic">
+  AI provider: `"anthropic"`, `"openai"`, or others
+</ParamField>
+
+<ParamField path="ai.model" type="string">
+  Model identifier (e.g., `"claude-sonnet-4-6"`, `"gpt-4"`)
+</ParamField>
+
+<Note>
+AI features include scaffolding, debugging, monitoring, migrations, infrastructure management, security auditing, and dry-run mode for safe testing.
+</Note>
+
+## Observability
+
+Instance-level logging, tracing, and export configuration:
+
+```yaml
+observability:
+  logging:
+    level: "info"
+    structured: true
+    include_request_body: false
+    scrub_secrets: true
+
+  tracing:
+    enabled: true
+    sampling_rate: 0.1
+
+  export:
+    - type: "otlp"
+      enabled: false
+      endpoint: ${OTEL_ENDPOINT}
+
+    - type: "grafana"
+      enabled: false
+      url: ${GRAFANA_URL}
+      api_key: ${GRAFANA_API_KEY}
+```
+
+<Accordion title="Logging Configuration">
+  <ParamField path="observability.logging.level" type="string" default="info">
+    Log level: `"debug"`, `"info"`, `"warn"`, `"error"`
+  </ParamField>
+  
+  <ParamField path="observability.logging.structured" type="boolean" default="true">
+    Output logs in structured JSON format
+  </ParamField>
+  
+  <ParamField path="observability.logging.include_request_body" type="boolean" default="false">
+    Include request bodies in logs (can expose sensitive data)
+  </ParamField>
+  
+  <ParamField path="observability.logging.scrub_secrets" type="boolean" default="true">
+    Automatically redact secret values from logs
+  </ParamField>
+</Accordion>
+
+<Accordion title="Tracing Configuration">
+  <ParamField path="observability.tracing.enabled" type="boolean" default="true">
+    Enable distributed tracing
+  </ParamField>
+  
+  <ParamField path="observability.tracing.sampling_rate" type="number" default="0.1">
+    Percentage of requests to trace (0.0 - 1.0)
+  </ParamField>
+</Accordion>
+
+## Security
+
+Instance-level security settings:
+
+```yaml
+security:
+  ssh:
+    password_auth: false
+    key_rotation_reminder_days: 90
+    session_timeout: 300
+
+  audit:
+    enabled: true
+    sign_entries: true
+    retain_for: "7y"
+
+  scan:
+    containers: true
+    dependencies: true
+    block_on_critical: true
+```
+
+<Accordion title="SSH Security">
+  <ParamField path="security.ssh.password_auth" type="boolean" default="false">
+    Allow password authentication (disabled by default)
+  </ParamField>
+  
+  <ParamField path="security.ssh.key_rotation_reminder_days" type="integer" default="90">
+    Days before showing key rotation reminder
+  </ParamField>
+  
+  <ParamField path="security.ssh.session_timeout" type="integer" default="300">
+    SSH session timeout in seconds
+  </ParamField>
+</Accordion>
+
+<Accordion title="Audit Configuration">
+  <ParamField path="security.audit.enabled" type="boolean" default="true">
+    Enable audit logging
+  </ParamField>
+  
+  <ParamField path="security.audit.sign_entries" type="boolean" default="true">
+    Cryptographically sign audit log entries
+  </ParamField>
+  
+  <ParamField path="security.audit.retain_for" type="string" default="7y">
+    Audit log retention period (e.g., `"7y"`, `"90d"`)
+  </ParamField>
+</Accordion>
+
+<Accordion title="Security Scanning">
+  <ParamField path="security.scan.containers" type="boolean" default="true">
+    Scan container images for vulnerabilities
+  </ParamField>
+  
+  <ParamField path="security.scan.dependencies" type="boolean" default="true">
+    Scan dependencies for known vulnerabilities
+  </ParamField>
+  
+  <ParamField path="security.scan.block_on_critical" type="boolean" default="true">
+    Block deployments with critical vulnerabilities
+  </ParamField>
+</Accordion>
+
+## Environment Variable Generation
+
+Controls `.env.example` auto-generation behavior:
+
+```yaml
+env:
+  generate:
+    auto: true
+    annotate: true
+    classify_secrets: true
+    gitignore: true
+
+  validate_on_startup: true
+  validate_on_push: true
+```
+
+<ParamField path="env.generate.auto" type="boolean" default="true">
+  Automatically regenerate `.env.example` on config changes
+</ParamField>
+
+<ParamField path="env.generate.annotate" type="boolean" default="true">
+  Add helpful comments explaining each variable
+</ParamField>
+
+<ParamField path="env.generate.classify_secrets" type="boolean" default="true">
+  Mark sensitive variables with `[SECRET]` annotation
+</ParamField>
+
+<ParamField path="env.generate.gitignore" type="boolean" default="true">
+  Automatically add `.env` to `.gitignore`
+</ParamField>
+
+<ParamField path="env.validate_on_startup" type="boolean" default="true">
+  Validate environment variables before starting instance
+</ParamField>
+
+<ParamField path="env.validate_on_push" type="boolean" default="true">
+  Validate environment variables in CI/CD pipelines
+</ParamField>
+
+## Complete Example
+
+```yaml
+version: "1.0"
+name: "my-applad-instance"
+description: "Production Applad instance"
+
+instance:
+  url: "https://api.myapp.com"
+  region: "us-east-1"
+  secret: ${APPLAD_SECRET}
+
+  features:
+    ui: true
+    api: true
+    graphql: true
+    realtime: true
+    storage: true
+    functions: true
+    deployments: true
+    workflows: true
+    flags: true
+    analytics: true
+    instruct: true
+    messaging: true
+
+ai:
+  enabled: true
+  provider: "anthropic"
+  model: "claude-sonnet-4-6"
+
+  features:
+    scaffolding: true
+    debugging: true
+    monitoring: true
+    migrations: true
+    infrastructure: true
+    security: true
+    dry_run: true
+
+observability:
+  logging:
+    level: "info"
+    structured: true
+    include_request_body: false
+    scrub_secrets: true
+
+  tracing:
+    enabled: true
+    sampling_rate: 0.1
+
+  export:
+    - type: "otlp"
+      enabled: false
+      endpoint: ${OTEL_ENDPOINT}
+
+security:
+  ssh:
+    password_auth: false
+    key_rotation_reminder_days: 90
+    session_timeout: 300
+
+  audit:
+    enabled: true
+    sign_entries: true
+    retain_for: "7y"
+
+  scan:
+    containers: true
+    dependencies: true
+    block_on_critical: true
+
+env:
+  generate:
+    auto: true
+    annotate: true
+    classify_secrets: true
+    gitignore: true
+
+  validate_on_startup: true
+  validate_on_push: true
+```
+
+## Next Steps
+
+<Card title="Organizations" icon="building" href="/config/organizations">
+  Set up organizations with roles and permissions
+</Card>

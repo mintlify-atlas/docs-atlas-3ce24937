@@ -1,0 +1,334 @@
+---
+title: applad instruct
+description: AI-powered assistant for infrastructure and configuration changes
+---
+
+## Overview
+
+The `applad instruct` command is the CLI surface of the lad — Applad's AI-powered assistant. You give instructions in plain language and the lad translates them into config changes, migrations, and `applad up` operations.
+
+Every instruction is attributed to your SSH key identity in the audit trail. The exact prompt is recorded alongside every change made — AI-assisted changes are always traceable to the human who authorized them.
+
+## Basic Usage
+
+```bash
+applad instruct "your instruction here"
+```
+
+The lad will:
+1. Understand your request
+2. Plan the necessary changes
+3. Create or modify config files
+4. Generate migrations if needed
+5. Show you what it would do
+
+## Scaffold and Configure
+
+### Create database tables
+
+```bash
+applad instruct "create a users table with email, name, avatar, and soft delete"
+```
+
+Creates a new table definition file at `tables/users.yaml` with fields for email, name, avatar_url, and soft delete support (deleted_at). Also generates the corresponding migration SQL and updates `.env.example` if needed.
+
+### Add search functionality
+
+```bash
+applad instruct "add fulltext search to posts"
+```
+
+Adds a fulltext index to the posts table's title and body fields. Edits `tables/posts.yaml` to add the index definition and generates a migration that creates the fulltext index in the database.
+
+### Create functions
+
+```bash
+applad instruct "create a function that sends a welcome message on user signup"
+```
+
+Creates a new function definition file at `functions/send-welcome-message.yaml` with a source block pointing to a local path, a trigger on `auth.user.created`, and appropriate container security settings. Also scaffolds the function source file at the configured path.
+
+### Set up deployments
+
+```bash
+applad instruct "set up a Play Store deployment pipeline for my Flutter app"
+```
+
+Creates a deployment pipeline definition at `deployments/android-production.yaml` with `type: play-store`, a source block pointing to the project's configured GitHub repo, and a build config for Flutter. Prompts for signing credential setup if not already configured.
+
+```bash
+applad instruct "set up a web deployment for myapp.com"
+```
+
+Creates a web deployment definition at `deployments/web.yaml` with `type: web`, the configured domain, SSL, sensible security headers, and a source block pointing to the web app repo.
+
+### Configure rate limiting
+
+```bash
+applad instruct "add rate limiting to the payments endpoint"
+```
+
+Adds a rate limiting rule to the payments endpoint in `observability/observability.yaml` — sets a per-user limit appropriate for payment operations.
+
+### Create workflows
+
+```bash
+applad instruct "create a workflow that sends push and email when a post is published"
+```
+
+Creates a workflow definition at `workflows/post-published.yaml` that triggers on a post status change to published, sends a push notification via the push channel and an email via the email channel.
+
+### Configure messaging templates
+
+```bash
+applad instruct "add a messaging template for order confirmation across email, sms and push"
+```
+
+Creates three messaging template reference files and prompts you to add the template content through the admin UI.
+
+## Infrastructure
+
+### Provision cloud resources
+
+```bash
+applad instruct "provision a Postgres instance on AWS RDS for production"
+```
+
+Adds an AWS RDS Postgres instance as a cloud adapter to the production environment in `project.yaml`. Updates `database/database.yaml` with a production environment override pointing to the RDS connection. Updates `.env.example` with the new required credentials. Then runs `applad up --env production --dry-run` so you can review before applying.
+
+### Set up staging environments
+
+```bash
+applad instruct "set up staging to mirror production on a Hetzner VPS"
+```
+
+Creates or updates the staging environment in `project.yaml` to target a Hetzner VPS, mirroring the infrastructure configuration of the production environment. Runs `applad up --env staging --dry-run` for review.
+
+### Migrate storage adapters
+
+```bash
+applad instruct "migrate our storage adapter from local to S3"
+```
+
+Updates `storage/storage.yaml` to use the S3 adapter, adds the required `${VAR}` references, updates `.env.example` with S3_BUCKET, S3_REGION, S3_ACCESS_KEY, S3_SECRET_KEY, and runs `applad up --dry-run` so you can review the change.
+
+### Switch email providers
+
+```bash
+applad instruct "switch email provider to SES for production"
+```
+
+Adds a production environment override to `messaging/messaging.yaml` switching the email provider from the current one to SES, adds the required credential references, and updates `.env.example`.
+
+### Manage cloud VMs
+
+```bash
+applad instruct "spin up a cloud VM for this data processing job and tear it down when done"
+```
+
+Provisions an on-demand cloud VM, SSHes into it, runs the specified processing job in a Docker container, then tears the VM down when the job completes. The VM appears in `applad cloud list` while running. Cost and duration are logged to the runtime database.
+
+### Optimize cloud resources
+
+```bash
+applad instruct "what cloud resources can we safely tear down?"
+```
+
+Reads the current list of cloud resources from `applad cloud list`, cross-references their usage patterns from the analytics database, and suggests which resources appear idle or underutilized and could be torn down.
+
+## Debug and Diagnose
+
+### Troubleshoot errors
+
+```bash
+applad instruct "why is my API error rate high?"
+```
+
+Reads the current API error rate from analytics, finds the requests contributing most to the error rate, cross-references function logs and database query traces, and gives a diagnosis with suggested fixes.
+
+```bash
+applad instruct "what failed in the last web deployment?"
+```
+
+Reads the deployment log for the most recent web deployment, identifies the failing step, and explains what went wrong and how to fix it.
+
+```bash
+applad instruct "why was the Play Store submission rejected?"
+```
+
+Reads the Play Store submission log for the most recent iOS build, identifies the rejection reason from the store API response, and explains what needs to change.
+
+### Performance optimization
+
+```bash
+applad instruct "why is this query slow?"
+```
+
+Reads the slow query log from the analytics database, identifies the query, cross-references the table definition in `tables/*.yaml`, and suggests index changes that would improve performance. Generates the index definition and migration if you confirm.
+
+### Security audits
+
+```bash
+applad instruct "is this permission rule safe?"
+```
+
+Reviews the permission rules for a specific table or set of tables in `tables/*.yaml` and identifies any rules that could allow unintended data access — missing auth filters, overly broad role permissions, or missing row-level filters.
+
+```bash
+applad instruct "are there any security anomalies in the last 24 hours?"
+```
+
+Reads the security event log for the past 24 hours and surfaces any patterns that look anomalous — unusual volumes of failed auth, access from unexpected locations, permission denial spikes, or unusual instruct activity.
+
+### Cost analysis
+
+```bash
+applad instruct "how much are we spending on cloud resources this month?"
+```
+
+Reads cloud resource lifecycle logs from the runtime database and produces a cost breakdown by resource type, project, and environment for the current month.
+
+## Context Flags
+
+Use `--context` to narrow the lad's focus to a specific data source. Without `--context` the lad draws on all available sources. With `--context` it focuses specifically on the named source, giving faster and more precise answers for targeted questions.
+
+### --context logs
+
+Focuses the lad on recent log output. Useful for diagnosing a specific failure that just happened.
+
+```bash
+applad instruct --context logs "what failed in the last hour?"
+```
+
+### --context tables
+
+Focuses the lad on the `tables/` directory. Useful for performance questions that relate specifically to schema and indexing decisions.
+
+```bash
+applad instruct --context tables "suggest indexes for better query performance"
+```
+
+### --context security
+
+Focuses the lad on the security event log. Useful for targeted security investigations.
+
+```bash
+applad instruct --context security "are there any anomalous access patterns?"
+```
+
+### --context cloud
+
+Focuses the lad on currently provisioned cloud resources. Useful for cost and utilization questions.
+
+```bash
+applad instruct --context cloud "which resources are idle?"
+```
+
+### --context deployments
+
+Focuses the lad on deployment logs and history. Useful for debugging a specific deployment failure.
+
+```bash
+applad instruct --context deployments "why did the iOS build fail?"
+```
+
+### --context functions
+
+Focuses the lad on function execution logs and error rates.
+
+```bash
+applad instruct --context functions "which functions have the highest error rate?"
+```
+
+### --context instruct-history
+
+Focuses the lad on the audit trail of previous instruct actions. Useful for reviewing what the lad (and who) changed recently, or for understanding the history of a specific piece of config.
+
+```bash
+applad instruct --context instruct-history "what did alice change yesterday?"
+```
+
+## Dry Run
+
+The `--dry-run` flag shows the complete plan the lad would execute without making any changes. Shows every file that would be created or modified, every migration that would be generated, and every `applad up` operation that would run.
+
+Use `--dry-run` to review and understand what an instruction would do before committing to it. Especially important for infrastructure changes and anything touching production.
+
+```bash
+applad instruct --dry-run "add fulltext search to posts"
+applad instruct --dry-run "provision RDS for production"
+applad instruct --dry-run "set up staging to mirror production"
+applad instruct --dry-run "create a function that processes payments"
+```
+
+## Scoping
+
+By default `instruct` operates in the context of the active project and environment (set by `applad projects switch` and the current environment). Use these flags to override.
+
+### --project
+
+Runs the instruction in the context of a specific project regardless of which project is currently active.
+
+```bash
+applad instruct --project mobile-app "why is staging slow?"
+```
+
+### --env
+
+Runs the instruction in the context of a specific environment. Useful for asking environment-specific questions without switching your active environment.
+
+```bash
+applad instruct --env production "show me anomalous access patterns"
+```
+
+## Examples
+
+### Create a complete feature
+
+```bash
+# Create the table
+applad instruct "create a comments table with user_id, post_id, content, and timestamps"
+
+# Add search
+applad instruct "add fulltext search to comments content"
+
+# Create a notification workflow
+applad instruct "create a workflow that notifies the post author when someone comments"
+
+# Review before applying
+applad instruct --dry-run "show me what would change"
+```
+
+### Diagnose and fix production issues
+
+```bash
+# Check for security issues
+applad instruct --env production "are there any security anomalies in the last 24 hours?"
+
+# Investigate errors
+applad instruct --context logs --env production "what's causing the 500 errors?"
+
+# Optimize performance
+applad instruct --context tables "suggest indexes for slow queries"
+```
+
+### Set up infrastructure
+
+```bash
+# Review the plan first
+applad instruct --dry-run "provision a Postgres instance on AWS RDS for production"
+
+# Apply if it looks good
+applad instruct "provision a Postgres instance on AWS RDS for production"
+
+# Verify it worked
+applad instruct --context cloud "show me our cloud resources"
+```
+
+## Best Practices
+
+- **Always use --dry-run first** for infrastructure changes and production deployments
+- **Be specific** in your instructions — the more context you provide, the better the result
+- **Review the audit trail** — every instruct action is logged with the exact prompt used
+- **Use context flags** for faster, more focused answers to targeted questions
+- **Iterate incrementally** — break large changes into smaller instructions you can review individually

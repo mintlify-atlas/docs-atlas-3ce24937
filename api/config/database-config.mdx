@@ -1,0 +1,326 @@
+---
+title: DatabaseConfig
+description: Database configuration (database/database.yaml)
+---
+
+## Overview
+
+`DatabaseConfig` defines database connections, adapters, connection pools, and migration settings. Configuration is stored in `database/database.yaml`.
+
+## Class Definition
+
+```dart
+final class DatabaseConfig {
+  const DatabaseConfig({
+    this.connections = const {},
+    this.defaultConnection = 'default',
+  });
+  
+  factory DatabaseConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="connections" type="Map<String, DatabaseConnection>" default="{}">
+  Named database connections
+</ParamField>
+
+<ParamField path="defaultConnection" type="String" default="default">
+  Name of the default connection to use
+</ParamField>
+
+## DatabaseConnection
+
+<ParamField path="adapter" type="DatabaseAdapter" required>
+  Database adapter: `sqlite`, `postgres`, `mysql`, or `turso`
+</ParamField>
+
+<ParamField path="connectionStringRef" type="SecretRef?">
+  Full connection string as secret reference
+</ParamField>
+
+<ParamField path="host" type="String?">
+  Database host address
+</ParamField>
+
+<ParamField path="port" type="int?">
+  Database port number
+</ParamField>
+
+<ParamField path="database" type="String?">
+  Database name or file path (for SQLite)
+</ParamField>
+
+<ParamField path="username" type="String?">
+  Database username
+</ParamField>
+
+<ParamField path="passwordRef" type="SecretRef?">
+  Database password as secret reference
+</ParamField>
+
+<ParamField path="pool" type="PoolConfig?">
+  Connection pool configuration
+</ParamField>
+
+<ParamField path="migrations" type="MigrationsConfig?">
+  Database migrations configuration
+</ParamField>
+
+## PoolConfig
+
+<ParamField path="minConnections" type="int" default="1">
+  Minimum connections in pool
+</ParamField>
+
+<ParamField path="maxConnections" type="int" default="10">
+  Maximum connections in pool
+</ParamField>
+
+## MigrationsConfig
+
+<ParamField path="directory" type="String" default="migrations">
+  Directory containing migration files
+</ParamField>
+
+<ParamField path="autoRun" type="bool" default="false">
+  Automatically run migrations on startup
+</ParamField>
+
+## DatabaseAdapter Enum
+
+```dart
+enum DatabaseAdapter {
+  sqlite,
+  postgres,
+  mysql,
+  turso;
+}
+```
+
+## Usage
+
+### SQLite (Development)
+
+```yaml
+# database/database.yaml
+adapter: sqlite
+path: data/dev.db
+
+migrations:
+  directory: database/migrations
+  auto_run: true
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = DatabaseConfig.fromMap(yamlData);
+final conn = config.connections[config.defaultConnection];
+
+if (conn != null) {
+  print('Adapter: ${conn.adapter.name}');
+  print('Database: ${conn.database}');
+}
+```
+
+### PostgreSQL (Production)
+
+```yaml
+adapter: postgres
+host: db.example.com
+port: 5432
+database: myapp_prod
+username: myapp
+password: "{{secrets.db_password}}"
+
+pool:
+  min: 2
+  max: 20
+
+migrations:
+  directory: database/migrations
+  auto_run: false
+```
+
+```dart
+final config = DatabaseConfig.fromMap(yamlData);
+final conn = config.connections[config.defaultConnection];
+
+if (conn != null) {
+  print('Host: ${conn.host}:${conn.port}');
+  print('Database: ${conn.database}');
+  
+  if (conn.passwordRef != null) {
+    print('Password secret: ${conn.passwordRef!.key}');
+  }
+  
+  if (conn.pool != null) {
+    print('Pool: ${conn.pool!.minConnections}-${conn.pool!.maxConnections}');
+  }
+}
+```
+
+### Connection String
+
+```yaml
+adapter: postgres
+connection_string: "{{secrets.database_url}}"
+```
+
+```dart
+final config = DatabaseConfig.fromMap(yamlData);
+final conn = config.connections[config.defaultConnection];
+
+if (conn?.connectionStringRef != null) {
+  print('Using connection string from: ${conn!.connectionStringRef!.key}');
+}
+```
+
+### Multiple Connections
+
+```yaml
+default: primary
+
+connections:
+  primary:
+    adapter: postgres
+    host: primary-db.example.com
+    port: 5432
+    database: myapp
+    username: app_user
+    password: "{{secrets.primary_db_password}}"
+    pool:
+      min: 5
+      max: 25
+  
+  analytics:
+    adapter: postgres
+    host: analytics-db.example.com
+    port: 5432
+    database: analytics
+    username: analytics_user
+    password: "{{secrets.analytics_db_password}}"
+    pool:
+      min: 2
+      max: 10
+  
+  cache:
+    adapter: sqlite
+    path: data/cache.db
+```
+
+```dart
+final config = DatabaseConfig.fromMap(yamlData);
+
+// Get primary connection
+final primary = config.connections['primary'];
+
+// Get analytics connection
+final analytics = config.connections['analytics'];
+
+// Get default connection
+final defaultConn = config.connections[config.defaultConnection];
+
+print('Connections: ${config.connections.keys.join(", ")}');
+```
+
+### Turso (LibSQL)
+
+```yaml
+adapter: turso
+url: "{{secrets.turso_url}}"
+auth_token: "{{secrets.turso_token}}"
+```
+
+### MySQL
+
+```yaml
+adapter: mysql
+host: mysql.example.com
+port: 3306
+database: myapp
+username: root
+password: "{{secrets.mysql_password}}"
+
+pool:
+  min: 3
+  max: 15
+```
+
+### Migrations Configuration
+
+```yaml
+adapter: postgres
+host: localhost
+port: 5432
+database: myapp
+username: postgres
+password: "{{secrets.db_pass}}"
+
+migrations:
+  directory: database/migrations
+  auto_run: false  # Manually run in production
+```
+
+```dart
+final config = DatabaseConfig.fromMap(yamlData);
+final conn = config.connections[config.defaultConnection];
+
+if (conn?.migrations != null) {
+  final migrations = conn!.migrations!;
+  print('Migrations directory: ${migrations.directory}');
+  print('Auto-run: ${migrations.autoRun}');
+  
+  if (migrations.autoRun) {
+    // Run migrations automatically
+  }
+}
+```
+
+### Creating Programmatically
+
+```dart
+final config = DatabaseConfig(
+  defaultConnection: 'primary',
+  connections: {
+    'primary': DatabaseConnection(
+      adapter: DatabaseAdapter.postgres,
+      host: 'localhost',
+      port: 5432,
+      database: 'myapp',
+      username: 'postgres',
+      passwordRef: SecretRef.parse('{{secrets.db_password}}'),
+      pool: PoolConfig(
+        minConnections: 5,
+        maxConnections: 20,
+      ),
+      migrations: MigrationsConfig(
+        directory: 'migrations',
+        autoRun: true,
+      ),
+    ),
+  },
+);
+
+final json = config.toJson();
+```
+
+## Database Adapters
+
+- **sqlite** - SQLite database (file-based, good for development)
+- **postgres** - PostgreSQL (production-ready, full-featured)
+- **mysql** - MySQL/MariaDB
+- **turso** - Turso/LibSQL (edge database)
+
+## Connection Pool Best Practices
+
+- Development: `min: 1, max: 5`
+- Staging: `min: 2, max: 10`
+- Production: `min: 5, max: 20-50` (depends on load)
+
+## Source Location
+
+`packages/applad_core/lib/src/config/database_config.dart:6`

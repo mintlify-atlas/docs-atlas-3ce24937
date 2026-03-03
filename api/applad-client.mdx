@@ -1,0 +1,320 @@
+---
+title: applad_client
+description: Client SDK for connecting Flutter and Dart apps to Applad backend
+---
+
+## Overview
+
+The `applad_client` package is the official Dart/Flutter SDK for connecting your app to an Applad backend. It provides type-safe APIs for:
+
+- Authentication (email, OAuth, SSO)
+- Database queries and mutations
+- File storage operations
+- Serverless function invocation
+- Real-time subscriptions
+
+## Installation
+
+```yaml
+dependencies:
+  applad_client: ^1.0.0
+```
+
+## Quick Start
+
+```dart
+import 'package:applad_client/applad_client.dart';
+
+// Initialize the client
+final client = ApplAdClient(
+  endpoint: 'https://api.your-project.com',
+  projectId: 'my-app',
+  apiKey: 'your-api-key', // Optional for anonymous access
+);
+
+// Sign in
+await client.auth.signIn(
+  email: 'user@example.com',
+  password: 'secure-password',
+);
+
+// Query data
+final posts = await client
+  .from('posts')
+  .select()
+  .eq('published', true)
+  .order('created_at', descending: true)
+  .limit(10)
+  .get();
+
+// Insert data
+await client.from('posts').insert({
+  'title': 'Hello Applad',
+  'content': 'My first post',
+  'published': true,
+});
+```
+
+## ApplAdClient
+
+The main client class that provides access to all services.
+
+### Constructor
+
+<ParamField path="endpoint" type="String" required>
+  The base URL of your Applad server (e.g., `https://api.your-project.com`)
+</ParamField>
+
+<ParamField path="projectId" type="String" required>
+  Your project identifier
+</ParamField>
+
+<ParamField path="apiKey" type="String">
+  Optional API key for anonymous access or public endpoints
+</ParamField>
+
+### Properties
+
+<ResponseField name="auth" type="AuthClient">
+  Authentication client for sign in/up, session management
+</ResponseField>
+
+<ResponseField name="storage" type="StorageClient">
+  File storage client for upload/download operations
+</ResponseField>
+
+<ResponseField name="functions" type="FunctionsClient">
+  Serverless functions client for invoking backend functions
+</ResponseField>
+
+<ResponseField name="realtime" type="RealtimeClient">
+  Real-time client for WebSocket subscriptions and live updates
+</ResponseField>
+
+<ResponseField name="authToken" type="String?">
+  Current authentication token (set automatically after sign-in)
+</ResponseField>
+
+### Methods
+
+#### from()
+
+Start a table query:
+
+```dart
+TableClient from(String table)
+```
+
+**Parameters:**
+- `table` - The name of the table to query
+
+**Returns:** A `TableClient` for building queries
+
+**Example:**
+
+```dart
+final users = await client.from('users').select().get();
+```
+
+## AuthClient
+
+Handle authentication and user management.
+
+```dart
+// Sign up with email
+await client.auth.signUp(
+  email: 'user@example.com',
+  password: 'secure-password',
+  data: {'name': 'John Doe'},
+);
+
+// Sign in with email
+await client.auth.signIn(
+  email: 'user@example.com',
+  password: 'secure-password',
+);
+
+// Sign in with OAuth provider
+await client.auth.signInWithProvider('google');
+
+// Get current user
+final user = await client.auth.currentUser();
+
+// Sign out
+await client.auth.signOut();
+
+// Refresh session
+await client.auth.refreshSession();
+```
+
+## TableClient / QueryBuilder
+
+Build and execute database queries.
+
+```dart
+// Select all columns
+final rows = await client.from('posts').select().get();
+
+// Select specific columns
+final titles = await client.from('posts').select(['title', 'author']).get();
+
+// Filter with WHERE conditions
+final published = await client
+  .from('posts')
+  .select()
+  .eq('published', true)
+  .get();
+
+// Multiple conditions
+final recent = await client
+  .from('posts')
+  .select()
+  .eq('published', true)
+  .gte('created_at', '2024-01-01')
+  .get();
+
+// Order results
+final sorted = await client
+  .from('posts')
+  .select()
+  .order('created_at', descending: true)
+  .get();
+
+// Limit and offset
+final page = await client
+  .from('posts')
+  .select()
+  .limit(10)
+  .offset(20)
+  .get();
+
+// Insert data
+await client.from('posts').insert({
+  'title': 'New Post',
+  'content': 'Content here',
+});
+
+// Update data
+await client.from('posts')
+  .update({'published': true})
+  .eq('id', postId)
+  .execute();
+
+// Delete data
+await client.from('posts')
+  .delete()
+  .eq('id', postId)
+  .execute();
+```
+
+## StorageClient
+
+Manage file uploads and downloads.
+
+```dart
+// Upload file
+await client.storage.upload(
+  bucket: 'avatars',
+  path: 'user-123/avatar.png',
+  file: imageFile,
+);
+
+// Download file
+final bytes = await client.storage.download(
+  bucket: 'avatars',
+  path: 'user-123/avatar.png',
+);
+
+// Get public URL
+final url = client.storage.getPublicUrl(
+  bucket: 'avatars',
+  path: 'user-123/avatar.png',
+);
+
+// List files in bucket
+final files = await client.storage.list(
+  bucket: 'avatars',
+  prefix: 'user-123/',
+);
+
+// Delete file
+await client.storage.delete(
+  bucket: 'avatars',
+  path: 'user-123/avatar.png',
+);
+```
+
+## FunctionsClient
+
+Invoke serverless functions.
+
+```dart
+// Invoke function
+final result = await client.functions.invoke(
+  'send-email',
+  body: {
+    'to': 'user@example.com',
+    'subject': 'Welcome',
+    'template': 'welcome',
+  },
+);
+
+print(result.data);
+```
+
+## RealtimeClient
+
+Subscribe to real-time updates.
+
+```dart
+// Subscribe to table changes
+final subscription = client.realtime.subscribe(
+  table: 'posts',
+  event: 'INSERT',
+  callback: (payload) {
+    print('New post: ${payload.data}');
+  },
+);
+
+// Unsubscribe
+await subscription.unsubscribe();
+
+// Subscribe to all events on a table
+final allEvents = client.realtime.subscribe(
+  table: 'posts',
+  event: '*',
+  callback: (payload) {
+    print('Event: ${payload.event}');
+    print('Data: ${payload.data}');
+  },
+);
+```
+
+## Error Handling
+
+```dart
+import 'package:applad_client/applad_client.dart';
+
+try {
+  await client.auth.signIn(
+    email: email,
+    password: password,
+  );
+} on AuthException catch (e) {
+  print('Auth failed: ${e.message}');
+} on NetworkException catch (e) {
+  print('Network error: ${e.message}');
+} catch (e) {
+  print('Unknown error: $e');
+}
+```
+
+## Source Location
+
+- Main library: `packages/applad_client/lib/applad_client.dart`
+- Client class: `packages/applad_client/lib/src/applad_client.dart`
+- Auth: `packages/applad_client/lib/src/auth/auth_client.dart`
+- Tables: `packages/applad_client/lib/src/tables/table_client.dart`
+- Storage: `packages/applad_client/lib/src/storage/storage_client.dart`
+- Functions: `packages/applad_client/lib/src/functions/functions_client.dart`
+- Realtime: `packages/applad_client/lib/src/realtime/realtime_client.dart`

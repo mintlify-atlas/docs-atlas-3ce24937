@@ -1,0 +1,387 @@
+---
+title: Database Schema
+description: Define tables, fields, indexes, and permissions in YAML with full type safety and cross-database support
+---
+
+## Overview
+
+Applad's database layer is adapter-agnostic. You define tables in YAML files under `database/tables/`, and Applad manages migrations, connections, and permissions consistently across PostgreSQL, MySQL, SQLite, MongoDB, and more.
+
+## Database Configuration
+
+First, configure your database connections in `database/database.yaml`:
+
+```yaml database/database.yaml
+connections:
+  - id: "primary"
+    default: true
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+    pool:
+      min: 2
+      max: 20
+      idle_timeout: 300
+      queue_timeout: 10
+    migrations:
+      auto: false
+      dir: "./migrations/primary"
+    ssl:
+      required: true
+      verify_cert: true
+
+  - id: "cache"
+    adapter: "redis"
+    url: ${REDIS_URL}
+    ssl:
+      required: true
+
+  - id: "analytics"
+    adapter: "postgres"
+    url: ${ANALYTICS_DATABASE_URL}
+    migrations:
+      auto: false
+      dir: "./migrations/analytics"
+    ssl:
+      required: true
+```
+
+### Environment Overrides
+
+Use different adapters for different environments:
+
+```yaml database/database.yaml
+environment_overrides:
+  development:
+    primary:
+      adapter: "sqlite"
+      path: "./data/dev.db"
+    analytics:
+      adapter: "sqlite"
+      path: "./data/analytics-dev.db"
+
+  staging:
+    primary:
+      adapter: "postgres"
+      url: ${STAGING_DATABASE_URL}
+      pool:
+        min: 1
+        max: 5
+```
+
+## Defining Tables
+
+Each table lives in its own YAML file under `database/tables/`.
+
+### Basic Table Structure
+
+```yaml database/tables/users.yaml
+name: "users"
+database: "primary"  # Optional — defaults to connection with default: true
+timestamps: true     # Adds created_at and updated_at
+soft_delete: true    # Adds deleted_at for soft deletes
+
+fields:
+  - name: "email"
+    type: "string"
+    unique: true
+    required: true
+    indexed: true
+
+  - name: "name"
+    type: "string"
+    required: true
+
+  - name: "avatar_url"
+    type: "string"
+    required: false
+
+  - name: "role"
+    type: "enum"
+    values: ["user", "admin"]
+    default: "user"
+
+  - name: "mfa_enabled"
+    type: "boolean"
+    default: false
+```
+
+### Field Types
+
+Applad supports these field types across all adapters:
+
+| Type | Description | Example |
+|------|-------------|--------|
+| `string` | Text field | `"email"` |
+| `text` | Long-form text | `"description"` |
+| `number` | Integer | `42` |
+| `float` | Decimal | `3.14` |
+| `boolean` | True/false | `true` |
+| `date` | Date only | `"2026-03-03"` |
+| `datetime` | Date and time | `"2026-03-03T10:30:00Z"` |
+| `enum` | Fixed set of values | `["draft", "published"]` |
+| `json` | JSON data | `{"key": "value"}` |
+| `array` | Array of items | `["tag1", "tag2"]` |
+| `relation` | Foreign key | References another table |
+
+### Relations
+
+Define relationships between tables:
+
+```yaml database/tables/users.yaml
+fields:
+  - name: "org_id"
+    type: "relation"
+    table: "organizations"
+    required: true
+```
+
+<Warning>
+Cross-database relations are flagged at validation time. If `users` targets the `primary` connection but references a table in the `analytics` connection, Applad warns you that the relation must be resolved at the application layer.
+</Warning>
+
+### Indexes
+
+Define indexes for performance:
+
+```yaml database/tables/users.yaml
+indexes:
+  - fields: ["email"]
+    unique: true
+  - fields: ["org_id", "role"]
+  - fields: ["created_at"]
+```
+
+For full-text search:
+
+```yaml database/tables/posts.yaml
+indexes:
+  - fields: ["title", "body"]
+    type: "fulltext"
+```
+
+## Permissions
+
+Permission rules live alongside the schema in the same file, reviewed in the same PR:
+
+```yaml database/tables/users.yaml
+permissions:
+  - role: "owner"
+    actions: ["*"]
+
+  - role: "admin"
+    actions: ["read", "write"]
+
+  - role: "user"
+    actions: ["read"]
+    filter: "id == $user.id"
+
+  - role: "*"
+    actions: ["read"]
+    filter: "id == $user.id AND deleted_at == null"
+```
+
+### Permission Actions
+
+- `read` — Can query records
+- `write` — Can create and update records
+- `delete` — Can delete records
+- `*` — All actions
+
+### Permission Filters
+
+Filters use a simple expression syntax:
+
+```yaml
+# Only own records
+filter: "id == $user.id"
+
+# Only published posts
+filter: "status == 'published'"
+
+# Author or admin
+filter: "author_id == $user.id OR $user.role == 'admin'"
+
+# Org-level isolation
+filter: "org_id == $user.org_id"
+```
+
+## Migrations
+
+<Steps>
+  <Step title="Generate a migration">
+    ```bash
+    applad db generate "add_avatar_to_users"
+    ```
+
+    Creates:
+    - `migrations/primary/003_add_avatar_to_users.sql`
+    - `migrations/primary/003_add_avatar_to_users.down.sql` (for rollback)
+  </Step>
+
+  <Step title="Write the SQL">
+    ```sql migrations/primary/003_add_avatar_to_users.sql
+    ALTER TABLE users ADD COLUMN avatar_url TEXT;
+    ```
+
+    ```sql migrations/primary/003_add_avatar_to_users.down.sql
+    ALTER TABLE users DROP COLUMN avatar_url;
+    ```
+  </Step>
+
+  <Step title="Review pending migrations">
+    ```bash
+    applad db migrate --dry-run
+    ```
+
+    Shows which migrations would be applied without actually applying them.
+  </Step>
+
+  <Step title="Apply migrations">
+    ```bash
+    applad db migrate
+    ```
+
+    Migrations are applied in filename order (001*, 002*, etc.), each wrapped in a transaction.
+  </Step>
+</Steps>
+
+## Multi-Database Projects
+
+You can route different tables to different connections:
+
+```yaml database/tables/events.yaml
+name: "events"
+database: "analytics"  # Routes to the analytics connection
+timestamps: true
+soft_delete: false
+
+fields:
+  - name: "type"
+    type: "string"
+    required: true
+    indexed: true
+
+  - name: "user_id"
+    type: "string"  # Plain string, not a relation — cross-database
+    required: false
+    indexed: true
+
+  - name: "payload"
+    type: "json"
+    required: false
+```
+
+<Info>
+Applad validates that tables referencing different connections don't have direct relations. Cross-database joins must be resolved at the application layer.
+</Info>
+
+## Working with Tables
+
+### List all tables
+
+```bash
+applad tables list
+```
+
+### Generate a new table
+
+```bash
+applad tables generate posts
+```
+
+Creates `database/tables/posts.yaml` with placeholder fields.
+
+### Validate table definitions
+
+```bash
+applad tables validate
+```
+
+Checks field types, relation references, permission syntax, and index definitions.
+
+### View table schema
+
+```bash
+applad tables show users
+```
+
+### Check for drift
+
+```bash
+applad tables diff users
+```
+
+Shows differences between the YAML definition and what exists in the database.
+
+## Database Shell
+
+Open an interactive SQL shell:
+
+```bash
+# Connect to primary connection
+applad db shell
+
+# Connect to specific connection
+applad db shell --connection analytics
+```
+
+## Example: Complete Table Definition
+
+```yaml database/tables/posts.yaml
+name: "posts"
+database: "primary"
+timestamps: true
+soft_delete: false
+
+fields:
+  - name: "title"
+    type: "string"
+    required: true
+
+  - name: "body"
+    type: "text"
+    required: true
+
+  - name: "author_id"
+    type: "relation"
+    table: "users"
+    required: true
+
+  - name: "status"
+    type: "enum"
+    values: ["draft", "published", "archived"]
+    default: "draft"
+
+  - name: "tags"
+    type: "array"
+    items: "string"
+
+indexes:
+  - fields: ["author_id"]
+  - fields: ["status", "created_at"]
+  - fields: ["title", "body"]
+    type: "fulltext"
+
+permissions:
+  - role: "*"
+    actions: ["read"]
+    filter: "status == 'published'"
+
+  - role: "user"
+    actions: ["write"]
+    filter: "author_id == $user.id"
+
+  - role: "admin"
+    actions: ["*"]
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Configure auth providers and identity management
+  </Card>
+  <Card title="Storage" icon="database" href="/guides/storage">
+    Add file storage with buckets and permissions
+  </Card>
+</CardGroup>

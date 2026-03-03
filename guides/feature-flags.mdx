@@ -1,0 +1,358 @@
+---
+title: Feature Flags
+description: Decouple code deployment from feature release with boolean and multivariate flags
+---
+
+## Overview
+
+Feature flags separate **deploy** from **release**. Deploy puts code on the server (`applad deploy`). Release makes functionality live to users (feature flags). These are independent decisions made by different people at different times.
+
+## How Flags Work
+
+Flag skeletons — that a flag exists, its variants, its per-environment defaults — live in `flags/*.yaml` and are version controlled. Targeting rules (which users see which variant) live in the admin database and are managed through the UI without a deployment.
+
+```
+┌─────────────────────┐
+│   flags/*.yaml      │  ← Version controlled
+│   • Flag exists     │
+│   • Type & variants │
+│   • Env defaults    │
+└─────────────────────┘
+
+┌─────────────────────┐
+│   Admin Database    │  ← Managed via UI
+│   • Targeting rules │
+│   • User segments   │
+│   • % rollouts      │
+└─────────────────────┘
+```
+
+## Flag Types
+
+### Boolean Flags
+
+Simple on/off switches:
+
+```yaml flags/new-dashboard.yaml
+key: "new-dashboard"
+type: "boolean"
+default: false
+description: "New dashboard UI redesign"
+
+environments:
+  development: true
+  staging: true
+  production: false
+```
+
+### Multivariate Flags
+
+A/B tests with multiple variants:
+
+```yaml flags/checkout-flow.yaml
+key: "checkout-flow"
+type: "multivariate"
+default: "control"
+variants: ["control", "variant-a", "variant-b"]
+description: "A/B test for checkout flow"
+
+environments:
+  development: "variant-a"
+  staging: "control"
+  production: "control"
+```
+
+## Creating Flags
+
+<Steps>
+  <Step title="Generate flag skeleton">
+    ```bash
+    applad flags generate new-feature
+    ```
+
+    Creates `flags/new-feature.yaml` with default structure.
+  </Step>
+
+  <Step title="Configure flag type and defaults">
+    ```yaml flags/new-feature.yaml
+    key: "new-feature"
+    type: "boolean"
+    default: false
+    description: "New feature release"
+
+    environments:
+      development: true   # Enabled in dev
+      staging: true       # Enabled in staging
+      production: false   # Disabled in production
+    ```
+  </Step>
+
+  <Step title="Deploy the flag skeleton">
+    ```bash
+    applad up --dry-run --diff
+    applad up
+    ```
+
+    The flag now exists but is off in production.
+  </Step>
+
+  <Step title="Configure targeting in admin UI">
+    Open the admin UI and navigate to Flags > new-feature. Configure:
+    - User segments (beta users, internal team, specific orgs)
+    - Percentage rollouts (5%, 25%, 50%, 100%)
+    - Custom targeting rules
+
+    Changes take effect immediately — no deployment required.
+  </Step>
+</Steps>
+
+## Environment Defaults
+
+Set per-environment defaults in the YAML file:
+
+```yaml flags/experimental-feature.yaml
+environments:
+  development: true   # Always on in dev
+  staging: true       # Always on in staging
+  production: false   # Off by default in production, controlled via targeting
+```
+
+## Using Flags in Code
+
+Applad provides SDKs for all major platforms:
+
+### Dart/Flutter
+
+```dart
+import 'package:applad/applad.dart';
+
+// Boolean flag
+final showNewDashboard = await applad.flags.isEnabled('new-dashboard');
+
+if (showNewDashboard) {
+  return NewDashboard();
+} else {
+  return OldDashboard();
+}
+
+// Multivariate flag
+final variant = await applad.flags.getVariant('checkout-flow');
+
+switch (variant) {
+  case 'variant-a':
+    return CheckoutFlowA();
+  case 'variant-b':
+    return CheckoutFlowB();
+  default:
+    return CheckoutFlowControl();
+}
+```
+
+### JavaScript/TypeScript
+
+```typescript
+import { applad } from '@applad/sdk';
+
+// Boolean flag
+const showNewDashboard = await applad.flags.isEnabled('new-dashboard');
+
+if (showNewDashboard) {
+  renderNewDashboard();
+} else {
+  renderOldDashboard();
+}
+
+// Multivariate flag
+const variant = await applad.flags.getVariant('checkout-flow');
+
+if (variant === 'variant-a') {
+  renderCheckoutA();
+} else if (variant === 'variant-b') {
+  renderCheckoutB();
+} else {
+  renderCheckoutControl();
+}
+```
+
+## Managing Flags
+
+### List all flags
+
+```bash
+applad flags list
+```
+
+Shows type, per-environment defaults, and whether targeting rules are configured.
+
+### Validate flag definitions
+
+```bash
+applad flags validate
+```
+
+Checks syntax, that multivariate flags have at least two variants, and that defaults are valid variants.
+
+### View flag details
+
+```bash
+applad flags show new-dashboard
+```
+
+Shows full definition, per-environment defaults, and current targeting rules.
+
+### Enable/disable flags
+
+```bash
+# Enable for environment
+applad flags enable new-dashboard --env production
+
+# Disable for environment
+applad flags disable new-dashboard --env production
+```
+
+Updates the admin database. Takes effect immediately without deployment.
+
+### View evaluation logs
+
+```bash
+applad flags logs new-dashboard
+```
+
+Shows every evaluation — when the flag was checked, which variant was returned, and for which user.
+
+## Gradual Rollouts
+
+Instead of flipping a flag on/off instantly, roll it out gradually:
+
+1. Deploy code with flag off in production
+2. In admin UI, set flag to 5% of users
+3. Monitor metrics
+4. Increase to 25%, then 50%, then 100%
+5. Flag is now fully released
+
+If issues are detected at any stage, immediately set back to 0% without redeploying.
+
+## User Segmentation
+
+Target flags to specific user groups:
+
+- **Beta users** — Users who opted into beta features
+- **Internal team** — Your company email domain
+- **Specific orgs** — Enterprise customers, specific tenants
+- **User properties** — Country, plan level, signup date
+
+Configured entirely through the admin UI.
+
+## Dark Launches
+
+Deploy code to production with flags off, then enable for internal testing:
+
+1. Deploy with `production: false` in flag YAML
+2. Code is on production servers but inactive
+3. In admin UI, enable flag only for internal team
+4. Test feature in production environment with real data
+5. When confident, enable for all users
+
+No separate staging environment needed. Test in production safely.
+
+## Instant Rollbacks
+
+If a released feature causes problems:
+
+```bash
+applad flags disable new-feature --env production
+```
+
+Or through admin UI: set flag to 0% of users.
+
+Takes effect immediately. No deployment, no rollback, no downtime.
+
+## Flag Lifecycle
+
+1. **Created** — Flag skeleton committed to version control
+2. **Deployed** — Flag exists, default is off
+3. **Testing** — Enabled for internal team only
+4. **Canary** — Enabled for 5-10% of users
+5. **Rollout** — Gradually increased to 100%
+6. **Released** — Fully enabled for all users
+7. **Cleanup** — Remove flag from code and config after feature is stable
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="One flag per feature">
+    Don't reuse flags for multiple features. Each feature gets its own flag with a clear, descriptive name.
+  </Accordion>
+
+  <Accordion title="Clean up old flags">
+    Once a feature is fully released and stable, remove the flag from code and delete the YAML file. Flags are temporary release controls, not permanent configuration.
+  </Accordion>
+
+  <Accordion title="Use descriptive keys">
+    Flag keys should describe what the flag controls:
+    - `new-checkout-flow` ✓
+    - `experiment-42` ✗
+  </Accordion>
+
+  <Accordion title="Document flag purpose">
+    Always include a `description` field explaining what the flag controls and why it exists.
+  </Accordion>
+
+  <Accordion title="Default to off in production">
+    Production environment should default to `false` for boolean flags and `"control"` for multivariate flags. Release is an active decision.
+  </Accordion>
+</AccordionGroup>
+
+## Example: A/B Test Configuration
+
+```yaml flags/pricing-page-redesign.yaml
+key: "pricing-page-redesign"
+type: "multivariate"
+default: "control"
+variants: ["control", "variant-a", "variant-b", "variant-c"]
+description: "A/B test for pricing page layout and copy"
+
+environments:
+  development: "variant-a"  # Always show variant-a in dev
+  staging: "control"        # Default to control in staging
+  production: "control"     # Default to control in production
+```
+
+In admin UI:
+- Control: 70% of users
+- Variant A: 10% of users
+- Variant B: 10% of users
+- Variant C: 10% of users
+
+Monitor conversion rates. Once a winner is identified, set 100% to that variant. After stable for 2 weeks, remove flag and make variant the default code path.
+
+## Example: Dark Launch
+
+```yaml flags/new-analytics-engine.yaml
+key: "new-analytics-engine"
+type: "boolean"
+default: false
+description: "New analytics processing engine"
+
+environments:
+  development: true
+  staging: true
+  production: false  # Deployed but inactive
+```
+
+Deploy to production. In admin UI, enable only for:
+- Internal team members
+- Beta users who opted in
+
+Test with real production data and traffic. When confident, gradually roll out to all users.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Messaging" icon="envelope" href="/guides/messaging">
+    Configure email, SMS, and push notifications
+  </Card>
+  <Card title="AI Assistant" icon="robot" href="/guides/ai-assistant">
+    Use "The Lad" to help manage infrastructure
+  </Card>
+</CardGroup>

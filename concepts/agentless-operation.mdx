@@ -1,0 +1,302 @@
+---
+title: Agentless Operation
+description: How Applad operates via SSH without persistent agents, inspired by Ansible's approach
+---
+
+Applad is **agentless**. There is no daemon sitting on your servers waiting for instructions. No agent to install, maintain, update, patch, or secure on every machine you manage.
+
+## The Agentless Philosophy
+
+Applad inherits Ansible's philosophy on this — and deliberately learns from both what Ansible got right and where it fell short.
+
+The operational overhead of managing agents across a fleet of servers is real, painful, and a source of its own class of bugs and security issues. Agent-based tools like Puppet and Chef require:
+
+- Installing and maintaining an agent on every managed server
+- Keeping agent versions in sync across your fleet
+- Managing agent configuration and credentials
+- Monitoring agent health and connectivity
+- Patching agent security vulnerabilities
+- Debugging agent-specific failures
+
+<Info>
+Applad takes Ansible's answer to this problem: **connect over SSH, do the work, disconnect**.
+</Info>
+
+Applad connects over SSH, synthesizes and applies a Docker Compose configuration, manages everything from your config tree, and leaves. The only requirement on the target machine is Docker.
+
+## How It Works
+
+When you run a command like `applad up --env production`, here's what happens:
+
+<Steps>
+  <Step title="Read config tree">
+    Applad reads your project config from `orgs/acme-corp/mobile-app/` and determines the infrastructure target from `project.yaml`
+  </Step>
+  <Step title="Validate and synthesize">
+    All config is validated. A `docker-compose.yml` is synthesized for the target environment based on your config
+  </Step>
+  <Step title="Open SSH connection">
+    Applad opens an SSH connection to the target server using your SSH key (no passwords, ever)
+  </Step>
+  <Step title="Transfer and apply">
+    The synthesized Docker Compose config is transferred and applied. Services start, restart, or remain unchanged based on what's needed
+  </Step>
+  <Step title="Close connection">
+    The SSH connection closes. Only Docker containers running your application remain on the machine
+  </Step>
+  <Step title="Record audit trail">
+    The full operation is logged to the runtime database, attributed to your SSH key identity
+  </Step>
+</Steps>
+
+<Note>
+Zero persistent footprint on target machines beyond Docker containers running your application.
+</Note>
+
+## Example: Deployment Flow
+
+Here's a concrete example of the agentless flow for a typical deployment:
+
+```bash
+$ applad deploy run android-production
+```
+
+<Steps>
+  <Step title="Read deployment config">
+    Applad reads `deployments/android-production.yaml` from your config tree
+  </Step>
+  <Step title="Open SSH to build server">
+    Applad opens an SSH connection to the build VPS using the developer's SSH key
+  </Step>
+  <Step title="Synthesize build environment">
+    Applad synthesizes the correct `docker-compose.yml` for the build environment
+  </Step>
+  <Step title="Run build container">
+    Applad runs the build container, fetches source, executes the build command
+  </Step>
+  <Step title="Fetch credentials">
+    Applad fetches signing credentials from the encrypted operational database
+  </Step>
+  <Step title="Sign and submit">
+    Applad signs the artifact and submits to the Play Store via API
+  </Step>
+  <Step title="Log and close">
+    Applad logs the full operation to the runtime database, attributed to the developer's SSH key. SSH connection closes
+  </Step>
+</Steps>
+
+Only Docker containers running your app remain on the machine. No agent. No persistent process. No daemon.
+
+## What This Means in Practice
+
+### Zero Agent Overhead
+
+- **No agent installation** — just Docker and SSH access
+- **No agent updates** — no version mismatch issues between controller and agents
+- **No agent monitoring** — no daemon health checks or restart logic
+- **No agent security patches** — smaller attack surface
+
+### Universal Compatibility
+
+<CardGroup cols={2}>
+  <Card title="Cloud VMs" icon="cloud">
+    AWS EC2, GCP Compute Engine, Azure VMs — if you can SSH in, Applad can manage it
+  </Card>
+  <Card title="VPS Providers" icon="server">
+    DigitalOcean, Hetzner, Linode, Vultr — any VPS with Docker and SSH
+  </Card>
+  <Card title="Bare Metal" icon="hard-drive">
+    On-premise servers, colocated hardware, dedicated servers
+  </Card>
+  <Card title="Edge Devices" icon="microchip">
+    Raspberry Pi, home servers, edge compute nodes
+  </Card>
+</CardGroup>
+
+Works on any machine you can SSH into. No platform-specific agent required.
+
+### Smaller Security Surface
+
+<Warning>
+No persistent daemon means no persistent attack surface on managed machines.
+</Warning>
+
+Agent-based tools create a new security concern: the agent itself becomes an attack vector. An attacker who compromises an agent daemon can:
+- Execute arbitrary commands on the host
+- Access credentials stored by the agent
+- Pivot to other managed machines
+- Maintain persistence through agent auto-restart mechanisms
+
+With Applad's agentless model:
+- No daemon to compromise
+- SSH keys are the only authentication mechanism
+- Connections are ephemeral — opened only when work needs to be done
+- Standard SSH hardening practices apply
+
+## Familiar Technology Stack
+
+Applad uses tools operations teams already know:
+
+<Tabs>
+  <Tab title="Docker Compose">
+    Service orchestration. The same `docker-compose.yml` that runs locally runs on your VPS. Standard `docker` CLI commands work everywhere:
+
+    ```bash
+    docker logs applad-database
+    docker exec -it applad-database psql
+    docker compose ps
+    ```
+  </Tab>
+  <Tab title="Caddy">
+    Reverse proxy and automatic SSL. No manual certificate management. No complex nginx configs. Just works.
+
+    ```bash
+    docker logs applad-caddy
+    caddy reload --config /etc/caddy/Caddyfile
+    ```
+  </Tab>
+  <Tab title="NATS/Redis">
+    Messaging and pub/sub for realtime features. Choose the one that fits your use case. Both are standard, well-documented, widely deployed.
+  </Tab>
+  <Tab title="SSH">
+    The universal remote access protocol. Every server administrator knows it. Every security team has policies for it. Every cloud provider supports it.
+  </Tab>
+</Tabs>
+
+<Check>
+Nothing is a black box. Everything is inspectable with tools your team already knows.
+</Check>
+
+## SSH Key Identity
+
+Every operation is attributed to an SSH key identity:
+
+```bash
+$ applad up --env production
+
+RECAP ─────────────────────────────────────────────
+  environment   production
+  duration      14.2s
+  actor         alice@acme-corp (SHA256:abc123...)
+
+  ok            12    already correct, no changes
+  changed        3    database, functions, messaging
+─────────────────────────────────────────────────────
+```
+
+The `actor` field shows:
+- **Identity** — `alice@acme-corp` from the SSH key metadata
+- **Key fingerprint** — `SHA256:abc123...` for cryptographic proof
+
+Every CLI operation, every config push, every admin UI session, every `applad instruct` action, every `applad access` operation, and every deployment is attributed to a named SSH key identity with cryptographic proof.
+
+<Info>
+The audit trail captures actor, action, target, change, and — for `applad instruct` — the exact prompt that produced the change.
+</Info>
+
+## No SSH Connection When Not Needed
+
+Applad only opens SSH connections when work needs to be done.
+
+If you run `applad up` against a fully reconciled environment:
+- Config is compared against last-applied state
+- All resources are already in sync
+- **No SSH connection is opened**
+- Recap shows `ok: 12, changed: 0`
+
+This is the idempotency contract in action. A no-op reconciliation is truly a no-op — it doesn't even connect to the server.
+
+## Drift Detection
+
+`applad status --drift` connects to every configured environment, compares running state against the config tree, and reports what has drifted — without changing anything:
+
+```bash
+$ applad status --drift --env production
+
+DRIFT REPORT ─────────────────────────────────────
+  environment   production
+
+  ✓ database         in sync
+  ✗ functions        drift detected
+      send-welcome-message: running v1.2.0, config specifies v1.3.0
+  ✓ storage          in sync
+  ✗ observability    drift detected
+      rate_limiting.routes[/auth/*].requests: running 20, config specifies 15
+──────────────────────────────────────────────────
+  2 resources drifted. Run applad up --env production to reconcile.
+```
+
+This is the continuous monitoring side of the agentless model. Applad can tell you at any time whether reality matches your config, and what the delta is if not.
+
+## Comparison to Agent-Based Tools
+
+<AccordionGroup>
+  <Accordion title="Puppet / Chef">
+    **Agent-based:** Require a daemon on every managed server. Agents poll for configuration updates or receive push notifications.
+
+    **Challenges:**
+    - Agent version drift across fleet
+    - Agent crashes or hangs
+    - Network connectivity issues between agent and master
+    - Complex bootstrapping process
+    - Additional memory and CPU overhead on every server
+
+    **Applad:** No agent. SSH in, apply config, leave. Zero overhead.
+  </Accordion>
+
+  <Accordion title="Ansible">
+    **Agentless:** Like Applad, uses SSH. No persistent agent required.
+
+    **Where Applad improves:**
+    - Docker Compose synthesis instead of YAML playbooks with Jinja2 templating
+    - First-class secrets management instead of Ansible Vault
+    - Guaranteed idempotency contracts instead of "usually idempotent"
+    - `--dry-run` on every command instead of only on `ansible-playbook`
+    - Actionable error messages with file, line, problem, and fix
+  </Accordion>
+
+  <Accordion title="Terraform">
+    **Agentless:** Operates via cloud provider APIs, not SSH.
+
+    **Different model:**
+    - Terraform is for cloud resource provisioning
+    - Applad is for full application backend management
+    - Terraform speaks to cloud APIs
+    - Applad speaks to your servers over SSH and manages Docker Compose
+
+    **They complement each other:** Use Terraform to provision a VPS, use Applad to manage everything that runs on it.
+  </Accordion>
+</AccordionGroup>
+
+## Requirements on Target Machines
+
+The only requirements for a machine to be managed by Applad:
+
+<Steps>
+  <Step title="Docker installed">
+    Docker Engine (not Desktop) — the only runtime dependency
+  </Step>
+  <Step title="SSH access">
+    SSH server running, accessible from your control machine
+  </Step>
+  <Step title="User with Docker permissions">
+    A user account (typically `applad`) with permission to run Docker commands
+  </Step>
+</Steps>
+
+No Dart tooling. No SDK. No Applad-specific runtime. Just Docker and SSH.
+
+<Tip>
+Your development machine needs the Applad CLI installed. Your servers need only Docker and SSH.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deployment Environments" icon="cloud" href="/concepts/environments">
+    Explore how Applad runs on local, VPS, and cloud infrastructure
+  </Card>
+  <Card title="Idempotency" icon="rotate" href="/concepts/idempotency">
+    Learn how Applad guarantees idempotent reconciliation
+  </Card>
+</CardGroup>

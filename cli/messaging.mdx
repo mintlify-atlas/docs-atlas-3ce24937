@@ -1,0 +1,104 @@
+---
+title: applad messaging
+description: Manage unified messaging across all channels
+---
+
+## Overview
+
+Manages unified messaging across all channels — email, SMS, push notifications, in-app, Slack, Discord, Teams. Provider config lives in `messaging/messaging.yaml`. Template content lives in the admin database (editable through the UI without a deployment). Template references live in `messaging/templates/*.yaml`.
+
+## Commands
+
+### applad messaging channels list
+
+Lists all configured messaging channels for the active project — which channels are enabled, which providers are configured for each, and whether each channel is healthy.
+
+```bash
+applad messaging channels list
+```
+
+### applad messaging test
+
+Sends test messages through various channels to verify configuration and template rendering.
+
+#### Test email
+
+Sends a test message through the email channel to the specified address using the named template. Useful for verifying that your email provider credentials are correct and that a template renders as expected before it goes to real users.
+
+```bash
+applad messaging test email --to user@example.com --template welcome
+```
+
+#### Test SMS
+
+Sends a test SMS to the specified phone number using the named template. Number must include country code.
+
+```bash
+applad messaging test sms --to +1234567890 --template password-reset
+```
+
+#### Test push notification
+
+Sends a test push notification to a specific device identified by its push token. Useful for testing FCM or APNS configuration and verifying token registration.
+
+```bash
+applad messaging test push --token <device-token> --template welcome
+```
+
+#### Test Slack
+
+Sends a test message to the configured Slack integration using the named template. Useful for verifying webhook configuration and template formatting.
+
+```bash
+applad messaging test slack --template new-user-alert
+```
+
+### applad messaging logs
+
+Shows the delivery log for all messaging channels — every message sent, its channel, template, recipient, timestamp, and delivery status (delivered, bounced, failed, etc.).
+
+```bash
+applad messaging logs
+```
+
+**Filter by channel:**
+```bash
+applad messaging logs --channel email
+```
+
+Filters to a specific channel. Useful for debugging a specific channel in isolation.
+
+**Filter by template:**
+```bash
+applad messaging logs --template welcome
+```
+
+Filters to messages sent using a specific template. Useful for checking whether a particular message type (e.g. welcome emails) is being delivered.
+
+**Examples:**
+```bash
+applad messaging logs --channel sms
+applad messaging logs --template order-confirmation
+```
+
+### applad messaging templates list
+
+Lists all messaging template references defined in the active project's `messaging/templates/` directory. Shows each template's key, which channels it supports, and its default subject/title/body values.
+
+```bash
+applad messaging templates list
+```
+
+### applad messaging templates validate
+
+Validates that all template references in the YAML files have corresponding content entries in the admin database. Catches cases where a template was defined in YAML but its content was never created in the admin UI.
+
+```bash
+applad messaging templates validate
+```
+
+## Related Commands
+
+- [applad workflows](/cli/workflows) - Automation workflows that can send messages
+- [applad auth](/cli/auth) - User authentication that triggers welcome messages
+- [applad config](/cli/config) - Manage messaging provider configuration

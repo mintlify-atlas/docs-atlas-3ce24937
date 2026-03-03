@@ -1,0 +1,528 @@
+---
+title: "Docker Compose Synthesis"
+description: "How Applad generates and orchestrates Docker Compose configurations from your config tree"
+---
+
+## Overview
+
+Applad uses **Docker Compose as the runtime model at every level** — local development, VPS staging, and VPS production. The CLI synthesizes a `docker-compose.yml` from your project config and orchestrates it.
+
+You do not need any Dart tooling installed. You do not need to manage SDK versions. You only need Docker.
+
+## Why Docker Compose Everywhere?
+
+Most tools make local development feel native and light — run a binary, get instant feedback — but then production looks completely different. Containers, different OS libraries, different runtime behavior. The gap between local and production is where bugs hide.
+
+Applad takes the opposite position: **local is production, from day one**.
+
+The same Docker Compose model that runs on your Hetzner VPS runs on your MacBook. When something works locally, it works in production — because it's the same thing.
+
+## How Synthesis Works
+
+When you run `applad up`, Applad:
+
+1. Reads and merges the entire config tree
+2. Validates all `${VAR}` references are satisfied
+3. **Synthesizes a `docker-compose.yml`** for the target environment
+4. Compares desired state against current state
+5. Applies changes via Docker Compose
+
+You never write Docker Compose files by hand.
+
+## What Gets Synthesized
+
+Applad generates a complete Docker Compose configuration including:
+
+- **Service definitions** — for database, functions, storage, messaging, workers
+- **Networking** — isolated networks for service communication
+- **Volume mounts** — for persistent data, source code, migrations
+- **Environment injection** — secrets and config variables
+- **Health checks** — for service readiness and restart policies
+- **Resource limits** — CPU, memory, disk constraints
+
+## Example: From Config to Compose
+
+### Your Config
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "postgres"
+    host: "db"
+    port: 5432
+    database: "applad_prod"
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
+    migrations:
+      dir: "database/migrations/primary"
+```
+
+```yaml functions/send-welcome-email.yaml
+name: "send-welcome-email"
+runtime: "node:20"
+memory: "512MB"
+timeout: "30s"
+source:
+  type: "local"
+  path: "./src/functions/send-welcome-email"
+env:
+  SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+```
+
+### Synthesized Docker Compose
+
+```yaml docker-compose.yml
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: applad_prod
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./database/migrations/primary:/migrations
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - applad_internal
+    restart: unless-stopped
+
+  functions:
+    image: applad/runtime-node:20
+    volumes:
+      - ./src/functions:/functions:ro
+    environment:
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - applad_internal
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - applad_internal
+    restart: unless-stopped
+
+networks:
+  applad_internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
+```
+
+<Info>
+This is generated automatically from your config. You never write it by hand.
+</Info>
+
+## Viewing Synthesized Compose
+
+Preview the Docker Compose that would be generated:
+
+```bash
+applad up --dry-run -vv
+```
+
+The `-vv` flag shows the full synthesized `docker-compose.yml` before execution.
+
+## Environment-Specific Synthesis
+
+The same config generates different Docker Compose for different environments:
+
+<Tabs>
+  <Tab title="Local">
+```yaml
+# Synthesized for local development
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"  # Exposed for debugging
+    environment:
+      POSTGRES_DB: applad_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+```
+  </Tab>
+  
+  <Tab title="Staging">
+```yaml
+# Synthesized for VPS staging
+services:
+  db:
+    image: postgres:16
+    # Ports NOT exposed externally
+    environment:
+      POSTGRES_DB: applad_staging
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /var/applad/staging/db:/var/lib/postgresql/data
+```
+  </Tab>
+  
+  <Tab title="Production">
+```yaml
+# Synthesized for VPS production
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: applad_prod
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /var/applad/production/db:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+```
+  </Tab>
+</Tabs>
+
+Same config tree, different synthesized output based on target environment.
+
+## Secrets Injection
+
+Secrets are never written to disk on servers. Applad injects them at runtime via the SSH session.
+
+### On Your VPS
+
+The synthesized `docker-compose.yml` contains **references**, not values:
+
+```yaml
+services:
+  functions:
+    environment:
+      STRIPE_SECRET: ${STRIPE_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+```
+
+### At Runtime
+
+Applad:
+1. Fetches secret values from the admin database
+2. Injects them via SSH session as environment variables
+3. Docker Compose receives the values without writing to disk
+
+A developer with SSH access to the production VPS cannot read secret values by inspecting the compose file on disk.
+
+## Service Dependencies
+
+Applad automatically generates service dependencies based on your config:
+
+```yaml functions/process-payment.yaml
+name: "process-payment"
+runtime: "node:20"
+dependencies:
+  - database
+  - messaging
+```
+
+Synthesizes to:
+
+```yaml
+services:
+  functions-process-payment:
+    depends_on:
+      db:
+        condition: service_healthy
+      messaging:
+        condition: service_healthy
+```
+
+Services start in the correct order automatically.
+
+## Resource Limits
+
+Control CPU and memory allocation:
+
+```yaml functions/video-processor.yaml
+name: "video-processor"
+runtime: "python:3.11"
+memory: "4GB"
+cpu: "2"
+```
+
+Synthesizes to:
+
+```yaml
+services:
+  functions-video-processor:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+```
+
+## Health Checks
+
+Applad generates appropriate health checks for each service:
+
+### Database
+
+```yaml
+healthcheck:
+  test: ["CMD", "pg_isready", "-U", "${DB_USER}"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+### Functions
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+### Custom Health Checks
+
+```yaml functions/api.yaml
+name: "api"
+runtime: "node:20"
+health_check:
+  path: "/health"
+  interval: "30s"
+  timeout: "10s"
+```
+
+## Volume Mounts
+
+Applad determines the correct volume strategy per environment:
+
+### Local Development
+
+```yaml
+services:
+  functions:
+    volumes:
+      - ./src/functions:/functions  # Live reload
+```
+
+Source code mounted directly for hot reload.
+
+### VPS Production
+
+```yaml
+services:
+  functions:
+    volumes:
+      - ./src/functions:/functions:ro  # Read-only
+```
+
+Source code mounted read-only for security.
+
+### Persistent Data
+
+```yaml
+services:
+  db:
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
+    driver: local
+```
+
+Named volumes for data persistence across restarts.
+
+## Networking
+
+Applad creates isolated networks:
+
+```yaml
+networks:
+  applad_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+```
+
+- **Internal services** — communicate via `applad_internal` network
+- **External access** — only through Caddy reverse proxy
+- **Isolation** — functions cannot directly access database ports
+
+## Caddy Integration
+
+Applad synthesizes Caddy config for SSL and routing:
+
+```yaml deployments/web-production.yaml
+name: "web-production"
+type: "web"
+domain: "app.example.com"
+port: 3000
+ssl:
+  auto: true
+```
+
+Synthesizes `Caddyfile`:
+
+```
+app.example.com {
+  reverse_proxy functions:3000
+  
+  tls ops@example.com
+  
+  encode gzip
+  
+  log {
+    output file /var/log/caddy/access.log
+  }
+}
+```
+
+And Docker Compose:
+
+```yaml
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+```
+
+## Idempotent Updates
+
+Applad compares the synthesized Docker Compose against the running state:
+
+- **Containers** — compared by image digest and environment hash
+- **Networks** — created if missing, left untouched if existing
+- **Volumes** — created if missing, preserved across updates
+
+Only changed services are restarted.
+
+## Handler Pattern
+
+When multiple config changes would each trigger a restart, Applad batches them:
+
+**Without handlers:**
+- Change messaging config → restart messaging service
+- Update messaging template → restart messaging service
+- Rotate API key → restart messaging service
+
+**Result:** 3 restarts
+
+**With handlers:**
+- All three changes applied
+- Messaging service restart handler fires once at the end
+
+**Result:** 1 restart
+
+This is built into Docker Compose synthesis — Applad determines the minimal set of changes required.
+
+## Debugging Synthesis
+
+### Verbose Output
+
+```bash
+# See per-resource status
+applad up -v
+
+# See synthesized Docker Compose and SSH commands
+applad up -vv
+
+# See full request/response detail
+applad up -vvv
+```
+
+### Validate Without Applying
+
+```bash
+applad up --dry-run --diff
+```
+
+Shows exactly what would change, including the full Docker Compose diff.
+
+### Inspect Running Compose
+
+SSH to your VPS:
+
+```bash
+ssh deploy@prod.example.com
+
+# View the synthesized compose file
+cat docker-compose.yml
+
+# Check service status
+docker compose ps
+
+# View service logs
+docker compose logs -f
+```
+
+## Manual Override (Escape Hatch)
+
+In rare cases, you can provide a custom Docker Compose fragment:
+
+```yaml project.yaml
+docker_compose:
+  override: "./docker-compose.override.yml"
+```
+
+Applad merges your override with the synthesized compose. Use sparingly — prefer config-driven synthesis.
+
+## Benefits of Synthesis
+
+<CardGroup cols={2}>
+  <Card title="No Manual Drift" icon="lock">
+    Generated from config every time. No manual edits to drift from source of truth.
+  </Card>
+  
+  <Card title="Environment Parity" icon="clone">
+    Same synthesis logic everywhere. Local mirrors production exactly.
+  </Card>
+  
+  <Card title="No Docker Expertise Required" icon="graduation-cap">
+    Team doesn't need to know Docker Compose syntax. Config is higher-level.
+  </Card>
+  
+  <Card title="Consistency Guaranteed" icon="check">
+    Every deployment uses the same patterns for networking, volumes, health checks.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+- Learn about [local development](/deployment/local)
+- Deploy to a [VPS](/deployment/vps)
+- Add [cloud adapters](/deployment/cloud-adapters)

@@ -1,0 +1,428 @@
+---
+title: Serverless Functions
+description: Deploy polyglot serverless functions with HTTP, event, and scheduled triggers in isolated containers
+---
+
+## Overview
+
+Applad functions run in isolated Docker containers and support multiple runtimes: Dart, Node.js, Python, Go, PHP, Ruby, and more. Each function is defined in a single YAML file with a source block pointing to your code.
+
+## Defining Functions
+
+Each function lives in `functions/<name>.yaml`.
+
+### Basic Function Structure
+
+```yaml functions/send-welcome-message.yaml
+name: "send-welcome-message"
+runtime: "dart"
+timeout: 30
+memory: "256mb"
+
+source:
+  type: "local"
+  path: "./src/functions/send-welcome-message/main.dart"
+
+container:
+  readonly_filesystem: true
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "api.resend.com"
+
+triggers:
+  - type: "event"
+    event: "auth.user.created"
+```
+
+## Supported Runtimes
+
+- `dart`
+- `node`
+- `python`
+- `go`
+- `php`
+- `ruby`
+- Custom containers via registry source
+
+## Source Configuration
+
+Functions can pull code from three source types:
+
+### Local Source
+
+```yaml
+source:
+  type: "local"
+  path: "./src/functions/send-welcome-message/main.dart"
+```
+
+### GitHub Repository
+
+```yaml
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  path: "src/functions/process-payment/index.js"
+  ssh_key: "ci-github-actions"
+```
+
+### Container Registry
+
+```yaml
+source:
+  type: "registry"
+  image: "ghcr.io/myorg/send-welcome-message:latest"
+  credentials: "ghcr-credentials"
+```
+
+## Trigger Types
+
+### HTTP Trigger
+
+```yaml
+triggers:
+  - type: "http"
+    method: "POST"
+    path: "/payments/process"
+    auth_required: true
+    rate_limit:
+      requests: 10
+      window: "1m"
+      per: "user"
+```
+
+### Event Trigger
+
+```yaml
+triggers:
+  - type: "event"
+    event: "auth.user.created"
+```
+
+Common events:
+- `auth.user.created`
+- `auth.user.updated`
+- `auth.user.deleted`
+- `payment.succeeded`
+- `payment.failed`
+- Custom events from your application
+
+### Scheduled Trigger
+
+```yaml
+triggers:
+  - type: "schedule"
+    cron: "0 9 * * *"  # Daily at 9am
+```
+
+Cron syntax: `minute hour day month weekday`
+
+## Webhook Functions
+
+Inbound webhooks from third-party services (Stripe, GitHub, Twilio) use HTTP triggers with signature verification:
+
+```yaml functions/handle-stripe-event.yaml
+name: "handle-stripe-event"
+runtime: "dart"
+timeout: 30
+memory: "256mb"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  path: "src/functions/handle-stripe-event/main.dart"
+  ssh_key: "ci-github-actions"
+
+container:
+  readonly_filesystem: true
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "api.stripe.com"
+
+triggers:
+  - type: "http"
+    method: "POST"
+    path: "/webhooks/stripe"
+    auth_required: false  # Third-party services can't send session tokens
+    verify:
+      provider: "stripe"  # Built-in: stripe | github | twilio | generic
+      secret: ${STRIPE_WEBHOOK_SECRET}
+
+    # Optional: filter to specific event types
+    events:
+      - "payment_intent.succeeded"
+      - "payment_intent.payment_failed"
+      - "customer.subscription.deleted"
+
+environment:
+  - key: "STRIPE_WEBHOOK_SECRET"
+    value: ${STRIPE_WEBHOOK_SECRET}
+```
+
+### Webhook Verification Providers
+
+```yaml
+# Stripe
+verify:
+  provider: "stripe"
+  secret: ${STRIPE_WEBHOOK_SECRET}
+
+# GitHub
+verify:
+  provider: "github"
+  secret: ${GITHUB_WEBHOOK_SECRET}
+  header: "X-Hub-Signature-256"  # Default, can override
+
+# Twilio
+verify:
+  provider: "twilio"
+  secret: ${TWILIO_AUTH_TOKEN}
+
+# Generic HMAC verification
+verify:
+  provider: "generic"
+  secret: ${CUSTOM_WEBHOOK_SECRET}
+  header: "X-Webhook-Signature"
+  algorithm: "hmac-sha256"  # hmac-sha1 | hmac-sha256 | hmac-sha512
+```
+
+## Container Security
+
+Functions run in hardened containers with security controls:
+
+```yaml
+container:
+  readonly_filesystem: true   # Prevent writes to container filesystem
+  no_new_privileges: true     # Prevent privilege escalation
+  network: "restricted"       # Only allow specific hosts
+  allowed_hosts:
+    - "api.stripe.com"
+    - "api.resend.com"
+```
+
+## Environment Variables
+
+Pass secrets and configuration to functions:
+
+```yaml
+environment:
+  - key: "STRIPE_SECRET"
+    value: ${STRIPE_SECRET}
+  - key: "API_ENDPOINT"
+    value: "https://api.myapp.com"
+```
+
+## Cloud Burst
+
+For heavy workloads, functions can burst to cloud compute:
+
+```yaml functions/daily-report.yaml
+name: "daily-report"
+runtime: "python"
+timeout: 300
+memory: "1gb"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  path: "src/functions/daily-report/daily.py"
+  ssh_key: "ci-github-actions"
+
+cloud_burst:
+  enabled: true
+  provider: "aws"
+  instance_type: "t3.large"
+  region: "eu-west-1"
+  credentials: "aws-production"
+  max_duration: 3600
+
+container:
+  readonly_filesystem: false
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "s3.eu-west-1.amazonaws.com"
+
+triggers:
+  - type: "schedule"
+    cron: "0 9 * * *"
+```
+
+Applad provisions the VM, runs the container, and tears it down when done.
+
+## Deploying Functions
+
+<Steps>
+  <Step title="List all functions">
+    ```bash
+    applad functions list
+    ```
+
+    Shows runtime, source type, trigger type, and deployment status.
+  </Step>
+
+  <Step title="Deploy a function">
+    ```bash
+    applad functions deploy send-welcome-message
+    ```
+
+    Applad:
+    1. Fetches code from source
+    2. Builds the container
+    3. Scans for vulnerabilities
+    4. Deploys to infrastructure
+    5. Keeps previous version running until new one is healthy
+  </Step>
+
+  <Step title="View deployment logs">
+    ```bash
+    applad functions logs send-welcome-message
+    ```
+
+    Streams execution logs in real time.
+  </Step>
+</Steps>
+
+### Deploy all functions
+
+```bash
+applad functions deploy --all
+```
+
+## Testing Functions
+
+### Invoke manually
+
+```bash
+applad functions invoke send-welcome-message
+```
+
+### Invoke with payload
+
+```bash
+applad functions invoke process-payment --data '{"amount": 1000}'
+```
+
+The function receives this as its event/request body.
+
+## Building and Scanning
+
+### Build without deploying
+
+```bash
+applad functions build send-welcome-message
+```
+
+Useful for catching build errors before deployment.
+
+### Scan for vulnerabilities
+
+```bash
+applad functions scan send-welcome-message
+```
+
+Reports findings by severity. Runs automatically during deployment.
+
+## Example: Complete Payment Function
+
+```yaml functions/process-payment.yaml
+name: "process-payment"
+runtime: "node"
+timeout: 60
+memory: "512mb"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  path: "src/functions/process-payment/index.js"
+  ssh_key: "ci-github-actions"
+
+container:
+  readonly_filesystem: true
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "api.stripe.com"
+
+triggers:
+  - type: "http"
+    method: "POST"
+    path: "/payments/process"
+    auth_required: true
+    rate_limit:
+      requests: 10
+      window: "1m"
+      per: "user"
+
+environment:
+  - key: "STRIPE_SECRET"
+    value: ${STRIPE_SECRET}
+```
+
+## Example: Event-Triggered Function
+
+```yaml functions/send-welcome-message.yaml
+name: "send-welcome-message"
+runtime: "dart"
+timeout: 30
+memory: "256mb"
+
+source:
+  type: "local"
+  path: "./src/functions/send-welcome-message/main.dart"
+
+container:
+  readonly_filesystem: true
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "api.resend.com"
+
+triggers:
+  - type: "event"
+    event: "auth.user.created"
+```
+
+## Example: Scheduled Function
+
+```yaml functions/daily-report.yaml
+name: "daily-report"
+runtime: "python"
+timeout: 300
+memory: "1gb"
+
+source:
+  type: "github"
+  repo: "myorg/myapp"
+  branch: "main"
+  path: "src/functions/daily-report/daily.py"
+  ssh_key: "ci-github-actions"
+
+container:
+  readonly_filesystem: false
+  no_new_privileges: true
+  network: "restricted"
+  allowed_hosts:
+    - "s3.eu-west-1.amazonaws.com"
+
+triggers:
+  - type: "schedule"
+    cron: "0 9 * * *"  # Daily at 9am
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deployments" icon="rocket" href="/guides/deployments">
+    Configure deployment pipelines for web, mobile, and desktop
+  </Card>
+  <Card title="Messaging" icon="envelope" href="/guides/messaging">
+    Set up email, SMS, and push notifications
+  </Card>
+</CardGroup>

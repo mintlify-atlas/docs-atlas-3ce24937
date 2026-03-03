@@ -1,0 +1,187 @@
+---
+title: applad orgs
+description: Manage organizations on your Applad instance. Organizations are the top level of the hierarchy — every project, developer, and piece of infrastructure belongs to an org.
+---
+
+## Overview
+
+Organizations are the top level of the hierarchy in Applad. Every project, every developer, every piece of infrastructure belongs to an org. One instance can host many completely isolated organizations.
+
+## Commands
+
+### List Organizations
+
+Lists all organizations on this instance with their IDs, names, member counts, and project counts.
+
+```bash
+applad orgs list
+```
+
+### Create Organization
+
+Creates a new organization. Scaffolds the org directory at `orgs/<org-name>/org.yaml` with default roles, an empty `ssh_keys` list, and a generated `.env.example`.
+
+```bash
+applad orgs create --name "Acme"
+```
+
+**Flags:**
+- `--name` - Name of the organization to create
+
+### Delete Organization
+
+Permanently deletes an organization and all its projects, data, and infrastructure configuration. Irreversible. Will prompt for confirmation.
+
+```bash
+applad orgs delete <org-id>
+```
+
+### Switch Organization
+
+Sets the active organization context for all subsequent commands. Most commands that accept `--org` default to whichever org you've switched to here.
+
+```bash
+applad orgs switch <org-id>
+```
+
+## Members
+
+### List Members
+
+Lists all members of an org — their identities, roles, and registered SSH key labels. Reads from the runtime database where member records are stored.
+
+```bash
+applad orgs members list <org-id>
+```
+
+### Invite Member
+
+Sends an invitation to the given email address to join the org with the specified role. The invited developer will need to register their SSH public key when they accept the invitation.
+
+```bash
+applad orgs members invite <org-id> \
+  --email user@example.com \
+  --role developer
+```
+
+**Flags:**
+- `--email` - Email address of the user to invite
+- `--role` - Role to assign (e.g., `developer`, `admin`)
+
+### Remove Member
+
+Removes a member from an org. Does not delete their data or audit trail entries — those are preserved. If they have an SSH key registered, it is automatically revoked.
+
+```bash
+applad orgs members remove <org-id> <user-id>
+```
+
+### Change Member Role
+
+Changes a member's role within an org. Role changes take effect immediately and are recorded in the audit trail.
+
+```bash
+applad orgs members role <org-id> <user-id> --role admin
+```
+
+**Flags:**
+- `--role` - New role to assign
+
+## SSH Key Management
+
+SSH keys are the identity system in Applad. Every developer registers their public key. Every CLI command, every UI session, and every `applad instruct` action is attributed to a key fingerprint in the audit trail. Private keys never leave the developer's machine — Applad only stores and uses public keys.
+
+### List SSH Keys
+
+Lists all SSH keys registered to an org — their labels, fingerprints, associated identities, roles, and permission scopes.
+
+```bash
+applad orgs keys list <org-id>
+```
+
+### Add SSH Key
+
+Registers a new SSH public key for an org member. The key file should be the `.pub` file — the public half of an SSH keypair. Applad reads the public key, computes its fingerprint, and adds it to `org.yaml` under `ssh_keys`. The developer's private key never leaves their machine.
+
+```bash
+applad orgs keys add <org-id> \
+  --label "alice@macbook-pro" \
+  --key "~/.ssh/id_ed25519.pub"
+```
+
+**Flags:**
+- `--label` - A descriptive label for the key
+- `--key` - Path to the public key file (`.pub`)
+
+### Revoke SSH Key
+
+Revokes a registered SSH key by its fingerprint. Any in-progress operations using this key are rejected immediately. The key's historical audit trail entries are preserved — revocation does not erase history. Use this when a developer leaves or a key is compromised.
+
+```bash
+applad orgs keys revoke <org-id> \
+  --fingerprint "SHA256:abc123..."
+```
+
+**Flags:**
+- `--fingerprint` - The fingerprint of the key to revoke
+
+### Rotate SSH Key
+
+Replaces an existing key with a new one while preserving the developer's identity and full audit history. The old key is revoked and the new key is linked to the same identity, so audit trail entries before and after rotation are all traceable to the same person.
+
+```bash
+applad orgs keys rotate <org-id> \
+  --old "SHA256:abc123..." \
+  --new "~/.ssh/id_ed25519_new.pub"
+```
+
+**Flags:**
+- `--old` - Fingerprint of the old key to revoke
+- `--new` - Path to the new public key file
+
+### Create Deployment Key
+
+Creates a scoped deployment key for use in CI/CD pipelines (GitHub Actions, GitLab CI, etc.). Unlike developer keys which have broad access, deployment keys have explicitly limited permissions defined by `--scopes`. They appear distinctly in the audit trail as automated actions rather than human actions, making it easy to distinguish what a person did from what a pipeline did.
+
+```bash
+applad orgs keys create-deployment <org-id> \
+  --label "ci-github-actions" \
+  --scopes "deployments:run,functions:deploy"
+```
+
+**Flags:**
+- `--label` - A descriptive label for the deployment key
+- `--scopes` - Comma-separated list of permission scopes
+
+## Examples
+
+### Create a new organization
+```bash
+applad orgs create --name "Acme Corp"
+```
+
+### Switch to an organization
+```bash
+applad orgs switch acme-corp
+```
+
+### Invite a developer
+```bash
+applad orgs members invite acme-corp \
+  --email alice@example.com \
+  --role developer
+```
+
+### Register an SSH key
+```bash
+applad orgs keys add acme-corp \
+  --label "alice-laptop" \
+  --key ~/.ssh/id_ed25519.pub
+```
+
+### Create a CI deployment key
+```bash
+applad orgs keys create-deployment acme-corp \
+  --label "github-actions" \
+  --scopes "deployments:run,functions:deploy"
+```

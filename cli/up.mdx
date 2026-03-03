@@ -1,0 +1,79 @@
+---
+title: applad up
+description: Reconcile infrastructure state with your configuration files
+---
+
+## Overview
+
+The single most important command. Reads your entire config tree, compares it to the current state of your infrastructure, and makes reality match your config. Connects to VPS targets over SSH, provisions Docker containers, configures Caddy, connects database adapters, sets up cloud adapters — then disconnects.
+
+Agentless — nothing persistent runs on your servers on Applad's behalf. Think of it like `terraform apply` but for your entire backend: tables, auth, storage, functions, deployments, realtime, messaging — all of it.
+
+## Usage
+
+```bash
+applad up [options]
+```
+
+## Options
+
+<ParamField path="--env" type="string">
+  Reconciles only a single named environment instead of all environments. Useful when you want to push changes to staging without touching production, or when setting up a new environment for the first time.
+</ParamField>
+
+<ParamField path="--watch" type="boolean" default="false">
+  Watches your config files for changes and automatically runs `applad up` whenever a file is saved. Intended for local development only — do not use this in production or CI.
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Shows exactly what `applad up` would do without actually doing anything. Like `terraform plan`. Shows which SSH connections would be opened, which Docker operations would run, which source repos would be fetched, which cloud resources would be provisioned or torn down, which config has drifted, and which migrations are pending. Always run this before applying changes to a production environment.
+</ParamField>
+
+## Examples
+
+### Apply all configuration changes
+
+```bash
+applad up
+```
+
+Reconciles all environments with their configurations.
+
+### Apply changes to a specific environment
+
+```bash
+applad up --env production
+```
+
+Only updates the production environment. Useful for controlled deployments.
+
+### Watch mode for development
+
+```bash
+applad up --watch
+```
+
+Automatically applies configuration changes when files are saved. Development only.
+
+### Preview changes without applying
+
+```bash
+applad up --dry-run
+```
+
+Shows what would change without making any actual changes. Recommended before production updates.
+
+### Preview changes for a specific environment
+
+```bash
+applad up --env production --dry-run
+```
+
+Shows what would change in production without applying changes.
+
+## Best Practices
+
+- Always run `--dry-run` before applying changes to production
+- Never use `--watch` in production or CI environments
+- Use `--env` to target specific environments for safer deployments
+- Review the output carefully, especially for infrastructure changes

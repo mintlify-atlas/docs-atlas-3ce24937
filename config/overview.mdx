@@ -1,0 +1,172 @@
+---
+title: Configuration Overview
+description: Understanding Applad's configuration tree structure, merge behavior, and file discovery system
+---
+
+Applad uses a hierarchical configuration system centered around YAML files. The configuration tree is discovered automatically by scanning the file system, with no explicit listing required.
+
+## Configuration Tree Structure
+
+The configuration follows a three-level hierarchy:
+
+```
+applad.yaml (instance)
+└── orgs/
+    └── <org-name>/
+        ├── org.yaml (organization)
+        └── <project-name>/
+            └── project.yaml (project)
+```
+
+### File Discovery
+
+Applad discovers your configuration automatically:
+
+- **Organizations**: Any directory under `orgs/` containing an `org.yaml` file is treated as an organization
+- **Projects**: Any subdirectory within an organization containing a `project.yaml` file is treated as a project
+- **No explicit listing**: The directory structure IS the config — no manifest files required
+
+<Note>
+The presence of `org.yaml` and `project.yaml` files is what defines organizations and projects. You don't need to register them anywhere else.
+</Note>
+
+## Merge Behavior
+
+Applad merges the full configuration tree at startup:
+
+1. **Instance-level** settings from `applad.yaml` apply globally
+2. **Organization-level** settings from `org.yaml` can extend or override instance settings
+3. **Project-level** settings from `project.yaml` have the highest precedence
+
+### Environment Overrides
+
+Many configuration files support `environment_overrides` blocks that allow per-environment customization:
+
+```yaml
+connections:
+  - id: "primary"
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+
+environment_overrides:
+  development:
+    primary:
+      adapter: "sqlite"
+      path: "./data/dev.db"
+  
+  staging:
+    primary:
+      url: ${STAGING_DATABASE_URL}
+      pool:
+        max: 5
+```
+
+<Accordion title="Environment Override Resolution">
+  When `applad up` runs for a specific environment:
+  
+  1. Base configuration is loaded first
+  2. Environment-specific overrides are deep-merged on top
+  3. Environment variables are resolved at merge time
+  4. The final merged config is used to synthesize Docker Compose or cloud resources
+</Accordion>
+
+## Environment Variables
+
+Configuration files use `${VARIABLE_NAME}` syntax to reference environment variables:
+
+```yaml
+instance:
+  url: "https://api.myapp.com"
+  secret: ${APPLAD_SECRET}
+```
+
+### Auto-Generated .env.example
+
+Applad automatically generates `.env.example` files at each level:
+
+- **Instance**: `applad.yaml` → `.env.example`
+- **Organization**: `org.yaml` → `orgs/<org-name>/.env.example`
+- **Project**: `project.yaml` → `orgs/<org-name>/<project-name>/.env.example`
+
+These files are annotated with:
+- Which config file references each variable
+- Whether the variable is a secret (should use `applad secrets set`)
+- Format hints and generation commands
+
+<Note>
+Run `applad env generate` to regenerate `.env.example` files. Copy to `.env` and fill in values.
+</Note>
+
+## Configuration Validation
+
+Applad validates your configuration on every `applad up` run:
+
+- **Schema validation**: Ensures all required fields are present and correctly typed
+- **Cross-reference validation**: Warns about broken references (e.g., a function referencing a non-existent table)
+- **Cross-database detection**: Flags table relations that span different database connections
+- **Permission conflicts**: Checks for overlapping or contradictory permission rules
+
+## Lock File
+
+After the first successful `applad up`, a `applad.lock` file is generated at the instance root. This file:
+
+- Records the exact configuration that was deployed
+- Includes resolved environment variable values (encrypted)
+- Enables deterministic deployments
+- Should be committed to version control
+
+## Common Patterns
+
+### Multiple Environments
+
+Define environments in `project.yaml` with different infrastructure targets:
+
+```yaml
+environments:
+  - name: "development"
+    infrastructure:
+      type: "local"
+  
+  - name: "staging"
+    infrastructure:
+      type: "vps"
+      host: "staging.example.com"
+  
+  - name: "production"
+    infrastructure:
+      type: "vps"
+      host: "prod.example.com"
+```
+
+### Shared Configuration
+
+Use the `shared/` directory at the instance root for reusable configuration:
+
+```
+my-project/
+├── applad.yaml
+└── shared/
+    ├── roles/
+    └── messaging/
+```
+
+<Note>
+Reference shared config using relative paths: `import: "../../shared/roles/default-roles.yaml"`
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Instance Config" icon="server" href="/config/instance">
+    Configure your Applad instance with `applad.yaml`
+  </Card>
+  <Card title="Organizations" icon="building" href="/config/organizations">
+    Set up organizations, roles, and permissions
+  </Card>
+  <Card title="Projects" icon="folder" href="/config/projects">
+    Define projects and environments
+  </Card>
+  <Card title="Environments" icon="layer-group" href="/config/environments">
+    Configure environment-specific overrides
+  </Card>
+</CardGroup>

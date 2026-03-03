@@ -1,0 +1,484 @@
+---
+title: "Cloud Adapters"
+description: "Use cloud services as adapters — S3, RDS, SES, and more — without platform lock-in"
+---
+
+## Cloud as Utility, Not Platform
+
+Applad treats cloud provider resources as **adapters** you draw from when they make sense for a specific resource. You're not locked into a platform — you use cloud services surgically.
+
+You might:
+- Run your core app on a Hetzner VPS (fast and cheap)
+- Use S3 for storage (excellent pricing)
+- Use SES for high-volume email at scale
+- Spin up a cloud compute instance for heavy processing — pay for duration, then tear it down
+
+**Your application code never changes.** Only the adapter config.
+
+## Storage Adapters
+
+Switch between local filesystem, S3, R2, GCS, or any S3-compatible service without changing application code.
+
+### Local Filesystem
+
+```yaml storage/storage.yaml
+adapter: "filesystem"
+config:
+  base_path: "/var/applad/storage"
+  max_file_size: "100MB"
+```
+
+Perfect for local development and small deployments.
+
+### AWS S3
+
+```yaml storage/storage.yaml
+adapter: "s3"
+config:
+  region: "us-east-1"
+  bucket: ${S3_BUCKET}
+  access_key: ${AWS_ACCESS_KEY_ID}
+  secret_key: ${AWS_SECRET_ACCESS_KEY}
+```
+
+Industry-standard object storage with global CDN integration.
+
+### Cloudflare R2
+
+```yaml storage/storage.yaml
+adapter: "s3"
+config:
+  endpoint: ${R2_ENDPOINT}
+  bucket: ${R2_BUCKET}
+  access_key: ${R2_ACCESS_KEY}
+  secret_key: ${R2_SECRET_KEY}
+```
+
+S3-compatible with zero egress fees — excellent for high-bandwidth applications.
+
+### Google Cloud Storage
+
+```yaml storage/storage.yaml
+adapter: "gcs"
+config:
+  project_id: ${GCP_PROJECT_ID}
+  bucket: ${GCS_BUCKET}
+  credentials: ${GCP_CREDENTIALS_JSON}
+```
+
+### Backblaze B2
+
+```yaml storage/storage.yaml
+adapter: "s3"
+config:
+  endpoint: "s3.us-west-004.backblazeb2.com"
+  bucket: ${B2_BUCKET}
+  access_key: ${B2_KEY_ID}
+  secret_key: ${B2_APPLICATION_KEY}
+```
+
+Cost-effective S3-compatible storage — $6/TB/month.
+
+<Info>
+Applad uses Rclone internally, supporting 40+ storage backends. Any Rclone-compatible provider works as an adapter.
+</Info>
+
+## Database Adapters
+
+Run SQLite locally, Postgres on VPS, then switch to managed RDS — same config structure, different adapter target.
+
+### PostgreSQL (Self-Hosted)
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "postgres"
+    host: "localhost"
+    port: 5432
+    database: ${DB_NAME}
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
+    migrations:
+      dir: "database/migrations/primary"
+```
+
+### AWS RDS (Managed PostgreSQL)
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "postgres"
+    host: ${RDS_HOST}
+    port: 5432
+    database: ${RDS_DATABASE}
+    user: ${RDS_USER}
+    password: ${RDS_PASSWORD}
+    ssl: true
+    migrations:
+      dir: "database/migrations/primary"
+```
+
+Same adapter, different host. Zero application code changes.
+
+### Google Cloud SQL
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "postgres"
+    host: ${CLOUD_SQL_HOST}
+    port: 5432
+    database: ${CLOUD_SQL_DATABASE}
+    user: ${CLOUD_SQL_USER}
+    password: ${CLOUD_SQL_PASSWORD}
+    ssl: true
+    migrations:
+      dir: "database/migrations/primary"
+```
+
+### SQLite (Local Development)
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "sqlite"
+    path: "/var/applad/data/app.db"
+    migrations:
+      dir: "database/migrations/primary"
+```
+
+Perfect for local development. Switch to Postgres for staging/production.
+
+### Multiple Database Connections
+
+Run different databases for different concerns:
+
+```yaml database/database.yaml
+connections:
+  primary:
+    adapter: "postgres"
+    host: ${PRIMARY_DB_HOST}
+    migrations:
+      dir: "database/migrations/primary"
+  
+  analytics:
+    adapter: "postgres"
+    host: ${ANALYTICS_DB_HOST}
+    migrations:
+      dir: "database/migrations/analytics"
+  
+  cache:
+    adapter: "redis"
+    host: ${REDIS_HOST}
+    port: 6379
+```
+
+Tables reference connections via `database:` field:
+
+```yaml database/tables/users.yaml
+name: "users"
+database: "primary"
+# ...
+```
+
+```yaml database/tables/events.yaml
+name: "events"
+database: "analytics"
+# ...
+```
+
+<Warning>
+Cross-database relations are detected at validation time with actionable errors. Handle joins at the application layer.
+</Warning>
+
+## Messaging Adapters
+
+Switch between SMTP, SendGrid, SES, Postmark, or Mailgun based on volume and cost.
+
+### SMTP (Self-Hosted)
+
+```yaml messaging/messaging.yaml
+email:
+  adapter: "smtp"
+  config:
+    host: ${SMTP_HOST}
+    port: 587
+    user: ${SMTP_USER}
+    password: ${SMTP_PASSWORD}
+    from: "noreply@example.com"
+```
+
+Good for low-volume email on VPS.
+
+### AWS SES (High-Volume)
+
+```yaml messaging/messaging.yaml
+email:
+  adapter: "ses"
+  config:
+    region: "us-east-1"
+    access_key: ${AWS_ACCESS_KEY_ID}
+    secret_key: ${AWS_SECRET_ACCESS_KEY}
+    from: "noreply@example.com"
+```
+
+$0.10 per 1,000 emails — excellent for scale.
+
+### SendGrid
+
+```yaml messaging/messaging.yaml
+email:
+  adapter: "sendgrid"
+  config:
+    api_key: ${SENDGRID_API_KEY}
+    from: "noreply@example.com"
+```
+
+### Postmark
+
+```yaml messaging/messaging.yaml
+email:
+  adapter: "postmark"
+  config:
+    server_token: ${POSTMARK_SERVER_TOKEN}
+    from: "noreply@example.com"
+```
+
+Excellent deliverability, detailed analytics.
+
+### SMS Adapters
+
+```yaml messaging/messaging.yaml
+sms:
+  adapter: "twilio"
+  config:
+    account_sid: ${TWILIO_ACCOUNT_SID}
+    auth_token: ${TWILIO_AUTH_TOKEN}
+    from: ${TWILIO_PHONE_NUMBER}
+```
+
+Supported adapters: Twilio, AWS SNS, Vonage, MessageBird.
+
+## Compute Adapters
+
+Run functions locally in Docker, burst to cloud compute for heavy workloads.
+
+### Local Docker (Default)
+
+```yaml functions/process-video.yaml
+name: "process-video"
+runtime: "python:3.11"
+memory: "2GB"
+timeout: "300s"
+source:
+  type: "local"
+  path: "./src/functions/process-video"
+```
+
+Runs in Docker containers on your VPS.
+
+### AWS Lambda (On-Demand)
+
+```yaml functions/process-video.yaml
+name: "process-video"
+runtime: "python:3.11"
+memory: "10GB"
+timeout: "900s"
+source:
+  type: "local"
+  path: "./src/functions/process-video"
+compute:
+  adapter: "lambda"
+  region: "us-east-1"
+```
+
+Applad synthesizes Lambda deployment, invokes, tears down. You pay only for execution time.
+
+### Cloud Build Instances
+
+For workloads that need specific hardware:
+
+```yaml deployments/ios-production.yaml
+name: "ios-production"
+type: "ios"
+build:
+  adapter: "aws-mac"
+  instance_type: "mac2.metal"
+  region: "us-east-1"
+source:
+  repo: "github.com/acme/mobile-app"
+  branch: "main"
+output:
+  target: "appstore"
+```
+
+Spins up an AWS Mac instance, builds, submits to App Store, tears down. Pay only for build duration.
+
+## CDN Adapters
+
+Serve static assets through CDN:
+
+### Cloudflare
+
+```yaml storage/buckets/public.yaml
+name: "public"
+public: true
+cdn:
+  adapter: "cloudflare"
+  zone_id: ${CF_ZONE_ID}
+  api_token: ${CF_API_TOKEN}
+  domain: "cdn.example.com"
+```
+
+### AWS CloudFront
+
+```yaml storage/buckets/public.yaml
+name: "public"
+public: true
+cdn:
+  adapter: "cloudfront"
+  distribution_id: ${CF_DISTRIBUTION_ID}
+  domain: "cdn.example.com"
+```
+
+## Deployment Continuum
+
+Move along the continuum as your needs grow:
+
+```
+Local dev (Docker Compose, SQLite, filesystem)
+  ↓
+VPS staging (Docker Compose, Postgres, filesystem)
+  ↓
+VPS production (Docker Compose, Postgres, filesystem)
+  ↓
+VPS + S3 storage adapter
+  ↓
+VPS + RDS database adapter
+  ↓
+VPS + SES email adapter
+  ↓
+Multi-VPS cluster + managed services
+  ↓
+Kubernetes on cloud
+```
+
+**At every step:**
+- Application code unchanged
+- Only adapter config changes
+- `applad up` reconciles to new state
+
+## Switching Adapters
+
+Preview the change:
+
+```bash
+applad up --env production --dry-run --diff
+```
+
+Shows exactly what will change when switching from filesystem to S3:
+
+```
+DIFF: storage/storage.yaml
+- adapter: "filesystem"
++ adapter: "s3"
+
+ACTIONS:
+  ✓ Storage adapter will be changed to S3
+  ✓ Existing files will be migrated
+  ✓ Application code: no changes required
+```
+
+Apply the change:
+
+```bash
+applad up --env production
+```
+
+Applad handles the migration transparently.
+
+## Cost Optimization Strategies
+
+### Start Simple
+
+```yaml
+# Local dev
+storage → filesystem
+database → sqlite
+email → smtp (on VPS)
+compute → docker (on VPS)
+```
+
+**Cost:** VPS only (~$10/month)
+
+### Add Adapters as Needed
+
+```yaml
+# Growing production
+storage → S3 (pay per GB)
+database → Postgres (on VPS or RDS)
+email → SES (pay per send)
+compute → Docker (on VPS) + Lambda (for spikes)
+```
+
+**Cost:** VPS + usage-based cloud services
+
+### Scale What Makes Sense
+
+- **S3 at scale:** $0.023/GB/month — cheaper than VPS disk at high volumes
+- **SES for email:** $0.10/1000 emails — cheaper than dedicated SMTP
+- **RDS when needed:** Managed backups, high availability — worth it at scale
+- **Lambda for spikes:** Pay only for execution, zero idle cost
+
+<Check>
+The sweet spot is usually: **VPS for core app + cloud adapters for specific resources**.
+</Check>
+
+## Secrets for Cloud Adapters
+
+Cloud credentials are secrets — never in config files:
+
+```bash
+# Set AWS credentials for production
+applad secrets set AWS_ACCESS_KEY_ID --env production
+applad secrets set AWS_SECRET_ACCESS_KEY --env production
+
+# Set different credentials for staging
+applad secrets set AWS_ACCESS_KEY_ID --env staging
+applad secrets set AWS_SECRET_ACCESS_KEY --env staging
+```
+
+Config references variables:
+
+```yaml storage/storage.yaml
+adapter: "s3"
+config:
+  access_key: ${AWS_ACCESS_KEY_ID}
+  secret_key: ${AWS_SECRET_ACCESS_KEY}
+```
+
+Same config file, different secrets per environment.
+
+## Adapter Validation
+
+Applad validates adapter configs before applying:
+
+```bash
+applad up --env production --dry-run
+
+ERROR storage/storage.yaml line 3
+  S3 adapter requires "bucket" field
+  Add: bucket: ${S3_BUCKET}
+  
+ERROR Missing required variable S3_BUCKET
+  Referenced by: storage/storage.yaml line 3
+  Set it with: applad secrets set S3_BUCKET --env production
+```
+
+Clear, actionable errors — file, line, problem, fix.
+
+## Next Steps
+
+- Learn about [Docker Compose synthesis](/deployment/docker-compose)
+- Set up [deployment pipelines](/guides/deployments)
+- Explore [secrets management](/cli/secrets)

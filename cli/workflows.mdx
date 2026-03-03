@@ -1,0 +1,300 @@
+---
+title: applad workflows
+description: Manage automation workflows and multi-step event sequences
+---
+
+## Overview
+
+The `applad workflows` command manages automation workflows — multi-step sequences of messages, function invocations, delays, and conditions triggered by events or schedules. Each workflow is defined by a single yaml file in `workflows/`.
+
+## Commands
+
+### applad workflows list
+
+Lists all workflows defined in the active project's `workflows/` directory, along with their trigger type and whether they are currently active.
+
+```bash
+applad workflows list
+```
+
+**Output includes:**
+- Workflow name
+- Trigger type (event, schedule, manual)
+- Active/paused status
+- Last execution time
+
+### applad workflows trigger
+
+Manually triggers a workflow immediately, outside of its normal trigger condition. Useful for testing a workflow end-to-end without waiting for the triggering event.
+
+```bash
+applad workflows trigger <name>
+```
+
+**Example:**
+
+```bash
+applad workflows trigger welcome-sequence
+```
+
+This executes the workflow immediately, bypassing its normal trigger condition.
+
+### applad workflows logs
+
+Shows the execution history for a workflow — every run, its steps, which steps succeeded, which failed, and the output of each step. Useful for debugging a workflow that isn't behaving as expected.
+
+```bash
+applad workflows logs <name>
+```
+
+**Output includes:**
+- Execution ID and timestamp
+- Step-by-step execution trace
+- Success/failure status for each step
+- Output and error messages
+- Total duration
+
+**Example:**
+
+```bash
+applad workflows logs order-fulfillment
+```
+
+### applad workflows pause
+
+Pauses a workflow so it stops accepting new trigger events. Any currently running executions complete normally. New trigger events are dropped while paused. Use this to temporarily disable a workflow without deleting it.
+
+```bash
+applad workflows pause <name>
+```
+
+**Example:**
+
+```bash
+applad workflows pause email-campaign
+```
+
+### applad workflows resume
+
+Resumes a paused workflow. It starts accepting new trigger events again immediately.
+
+```bash
+applad workflows resume <name>
+```
+
+**Example:**
+
+```bash
+applad workflows resume email-campaign
+```
+
+## Workflow Definition
+
+Workflows are defined in yaml files in the `workflows/` directory. Each workflow specifies:
+
+- **Trigger**: What starts the workflow (event, schedule, or manual)
+- **Steps**: Sequential or parallel actions to execute
+- **Conditions**: Logic to control flow
+- **Error handling**: What to do when steps fail
+
+## Common Workflow Patterns
+
+### Event-triggered workflows
+
+Workflows that run in response to database events, auth events, or custom events.
+
+```yaml
+# workflows/welcome-user.yaml
+name: welcome-user
+trigger:
+  type: event
+  event: auth.user.created
+steps:
+  - send_message:
+      channel: email
+      template: welcome
+  - invoke_function:
+      name: setup-user-preferences
+```
+
+Trigger with:
+
+```bash
+# Happens automatically on user signup
+# Or test manually:
+applad workflows trigger welcome-user
+```
+
+### Scheduled workflows
+
+Workflows that run on a schedule using cron syntax.
+
+```yaml
+# workflows/daily-report.yaml
+name: daily-report
+trigger:
+  type: schedule
+  cron: "0 9 * * *"  # 9 AM daily
+steps:
+  - invoke_function:
+      name: generate-report
+  - send_message:
+      channel: email
+      template: daily-report
+```
+
+### Multi-step sequences
+
+Workflows with delays, conditions, and branching logic.
+
+```yaml
+# workflows/onboarding-sequence.yaml
+name: onboarding-sequence
+trigger:
+  type: event
+  event: auth.user.created
+steps:
+  - send_message:
+      channel: email
+      template: welcome
+  - delay: 24h
+  - condition:
+      if: user.completed_profile == false
+      then:
+        - send_message:
+            channel: email
+            template: complete-profile-reminder
+  - delay: 72h
+  - send_message:
+      channel: email
+      template: feature-tips
+```
+
+## Examples
+
+### Test a workflow manually
+
+```bash
+# Trigger the workflow
+applad workflows trigger welcome-user
+
+# Check the execution logs
+applad workflows logs welcome-user
+```
+
+### Debug a failing workflow
+
+```bash
+# View execution history
+applad workflows logs order-processing
+
+# Look for failed steps
+# Fix the issue in the workflow yaml or function code
+# Test again
+applad workflows trigger order-processing
+```
+
+### Temporarily disable a workflow
+
+```bash
+# Pause during maintenance
+applad workflows pause email-campaign
+
+# Resume when ready
+applad workflows resume email-campaign
+```
+
+### Monitor workflow executions
+
+```bash
+# List all workflows and their status
+applad workflows list
+
+# Check recent executions for a specific workflow
+applad workflows logs abandoned-cart-reminder
+```
+
+### Create a new workflow with instruct
+
+```bash
+# Use the AI assistant to scaffold a workflow
+applad instruct "create a workflow that sends a reminder email 24 hours after cart abandonment"
+
+# Test it
+applad workflows trigger cart-abandonment-reminder
+
+# Check the logs
+applad workflows logs cart-abandonment-reminder
+```
+
+## Workflow Steps
+
+Workflows can include various step types:
+
+### Send messages
+
+```yaml
+- send_message:
+    channel: email
+    template: welcome
+    to: ${user.email}
+```
+
+### Invoke functions
+
+```yaml
+- invoke_function:
+    name: process-payment
+    data:
+      order_id: ${event.order_id}
+```
+
+### Delays
+
+```yaml
+- delay: 24h  # or 30m, 7d, etc.
+```
+
+### Conditions
+
+```yaml
+- condition:
+    if: ${user.subscription_tier} == 'premium'
+    then:
+      - send_message:
+          channel: email
+          template: premium-welcome
+    else:
+      - send_message:
+          channel: email
+          template: standard-welcome
+```
+
+### Parallel execution
+
+```yaml
+- parallel:
+    - send_message:
+        channel: email
+        template: confirmation
+    - send_message:
+        channel: sms
+        template: confirmation
+    - invoke_function:
+        name: update-analytics
+```
+
+## Best Practices
+
+- **Test with `trigger`**: Always test workflows manually before relying on automatic triggers
+- **Check logs regularly**: Use `workflows logs` to monitor execution and catch issues early
+- **Use pausing wisely**: Pause workflows during maintenance or when debugging issues
+- **Keep steps simple**: Break complex logic into separate functions that workflows call
+- **Handle failures gracefully**: Define error handling and retry logic for critical workflows
+- **Monitor execution times**: Long-running workflows may need optimization or parallelization
+
+## Related Commands
+
+- [`applad functions`](/cli/functions) - Manage functions that workflows can invoke
+- [`applad messaging`](/cli/messaging) - Configure messaging channels used by workflows
+- [`applad instruct`](/cli/instruct) - Use AI to create and modify workflows

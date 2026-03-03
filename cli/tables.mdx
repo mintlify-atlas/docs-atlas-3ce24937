@@ -1,0 +1,70 @@
+---
+title: applad tables
+description: Manage table definitions and schema configuration
+---
+
+## Overview
+
+Manages table definitions in your Applad project. Each table lives in its own YAML file under `tables/`. "tables" is the universal term regardless of whether the underlying adapter is relational (PostgreSQL, MySQL) or document-based (MongoDB). Permission rules live alongside the schema in the same file.
+
+## Commands
+
+### applad tables list
+
+Lists all tables defined in the active project's `tables/` directory, along with their field counts and whether they have permissions defined.
+
+```bash
+applad tables list
+```
+
+### applad tables generate
+
+Generates a new empty table definition file at `tables/<name>.yaml` with placeholder fields, indexes, and permission rules. Edit the generated file to define your actual schema. Running `applad db migrate` will apply it.
+
+```bash
+applad tables generate <name>
+```
+
+**Example:**
+```bash
+applad tables generate users
+```
+
+### applad tables validate
+
+Validates all table definition files for correctness — checks field types, relation references (does the referenced table exist?), permission rule syntax, and index definitions. Does not touch the database.
+
+```bash
+applad tables validate
+```
+
+### applad tables show
+
+Shows the full schema and permission rules for a specific table as currently defined in the YAML file.
+
+```bash
+applad tables show <name>
+```
+
+**Example:**
+```bash
+applad tables show users
+```
+
+### applad tables diff
+
+Shows the difference between a table's YAML definition and what actually exists in the database. Useful for catching drift — cases where the database schema has diverged from what the config files describe, usually because a migration was applied manually or a file was edited without running migrations.
+
+```bash
+applad tables diff <name>
+```
+
+**Example:**
+```bash
+applad tables diff posts
+```
+
+## Related Commands
+
+- [applad config validate](/cli/config) - Validate entire config tree including tables
+- [Database schema guide](/guides/database-schema) - Learn how to define tables in YAML

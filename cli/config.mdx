@@ -1,0 +1,111 @@
+---
+title: "applad config"
+description: "Manage the config file tree and its relationship to the running instance"
+---
+
+## Overview
+
+The `applad config` command manages the config file tree and its relationship to the running instance. The config tree is the source of truth — these commands help you keep it in sync.
+
+## Commands
+
+### Validate Config
+
+Validates the entire config tree for correctness without starting or changing anything. Checks syntax, required fields, cross-references between files (e.g. a workflow referencing a function that doesn't exist), security policy completeness, and that all `${VAR}` references have corresponding entries in your `.env`. Safe to run at any time.
+
+```bash
+applad config validate
+```
+
+**What it checks:**
+
+- YAML syntax correctness
+- Required fields are present
+- Cross-references between files are valid
+- Security policy completeness
+- All `${VAR}` references have corresponding `.env` entries
+
+### Show Config Diff
+
+Shows the difference between your local config tree and the config that the running Applad instance is currently using. Useful for seeing what would change before pushing, or for understanding why your running instance is behaving differently from what's in your files.
+
+```bash
+applad config diff
+```
+
+### Push Config
+
+Pushes your local config tree to the running Applad instance, making it the new active config. Every push is cryptographically signed with your SSH key and recorded in the audit trail with a full diff of what changed. The running instance reloads affected modules without downtime.
+
+```bash
+applad config push
+```
+
+**What happens:**
+
+1. Config is cryptographically signed with your SSH key
+2. Full diff is recorded in the audit trail
+3. Config becomes the new active config
+4. Running instance reloads affected modules without downtime
+
+### Pull Config
+
+Pulls the config currently running on the instance back to your local files. Useful if someone pushed changes through the admin UI or another developer pushed directly and you want to sync your local files to match.
+
+```bash
+applad config pull
+```
+
+### Export Config
+
+Exports the entire config tree as a zip archive. Environment variable values are redacted — only the key names are included. Useful for sharing a sanitized snapshot of your configuration, for backup, or for migrating to a new instance.
+
+```bash
+applad config export
+```
+
+**What's included:**
+
+- Entire config tree structure
+- All YAML files
+- Environment variable key names (values redacted)
+
+### Preview Config Merge
+
+Shows how the full config tree merges together in memory without actually starting or changing anything. Applad merges dozens of yaml files into one resolved config at startup — this lets you see the result of that merge and catch conflicts or unexpected overrides before they cause issues.
+
+```bash
+applad config merge --dry-run
+```
+
+**Use this to:**
+
+- See the final resolved configuration
+- Catch merge conflicts
+- Identify unexpected overrides
+- Debug configuration issues before deployment
+
+## Config Snapshot Management
+
+### Create Snapshot
+
+Creates a point-in-time snapshot of the current config state. Snapshots are stored with a timestamp and can be restored later.
+
+```bash
+applad config snapshot
+```
+
+**What's captured:**
+
+- Complete config tree state
+- Timestamp
+- Author (SSH key identity)
+- Config hash for verification
+
+## Best Practices
+
+1. **Always validate before pushing:** Run `applad config validate` before `applad config push` to catch errors early
+2. **Check the diff:** Use `applad config diff` to review changes before applying them
+3. **Use version control:** Keep your config tree in git alongside your application code
+4. **Test in staging first:** Push config changes to staging environments before production
+5. **Review the audit trail:** Check `applad audit list --action config.push` to see who changed what and when

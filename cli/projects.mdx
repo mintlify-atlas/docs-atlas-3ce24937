@@ -1,0 +1,112 @@
+---
+title: applad projects
+description: Manage projects within organizations. Projects own all resources — tables, functions, deployments, messaging, flags, etc. Every resource belongs to exactly one project.
+---
+
+## Overview
+
+Projects live inside organizations and own all resources — tables, functions, deployments, messaging, flags, etc. Every resource belongs to exactly one project.
+
+## Commands
+
+### List Projects
+
+Lists all projects across the entire instance.
+
+```bash
+applad projects list
+```
+
+Lists all projects belonging to a specific org.
+
+```bash
+applad projects list --org <org-id>
+```
+
+**Flags:**
+- `--org` - Filter projects by organization ID
+
+### Create Project
+
+Creates a new project inside an org. Scaffolds the project directory at `orgs/<org>/projects/<name>/` with a `project.yaml`, empty subdirectories for each resource type, and a generated `.env.example`.
+
+```bash
+applad projects create \
+  --name "Mobile App" \
+  --org "acme-corp"
+```
+
+**Flags:**
+- `--name` - Name of the project to create
+- `--org` - Organization ID to create the project in
+
+### Delete Project
+
+Permanently deletes a project and all its config files. Does not automatically delete runtime data — use `applad db reset` (dev only) or coordinate a manual data cleanup. Will prompt for confirmation.
+
+```bash
+applad projects delete <project-id>
+```
+
+### Switch Project
+
+Sets the active project context for all subsequent commands. Most commands that are project-scoped default to whichever project you've switched to here, saving you from having to pass `--project` on every command.
+
+```bash
+applad projects switch <project-id>
+```
+
+### Show Project Info
+
+Shows details about the currently active project — its ID, org, configured environments, infrastructure targets, and which features are enabled.
+
+```bash
+applad projects info
+```
+
+### Clone Project
+
+Creates a new project by copying the config structure of an existing project. Copies all yaml files (tables, functions, deployments, flags, etc.) but does not copy runtime data, secrets, or infrastructure state. Useful for creating a staging environment that mirrors production's structure.
+
+```bash
+applad projects clone <project-id> \
+  --name "Mobile App Staging"
+```
+
+**Flags:**
+- `--name` - Name for the cloned project
+
+## Examples
+
+### Create a new project
+```bash
+applad projects create \
+  --name "Mobile App" \
+  --org "acme-corp"
+```
+
+### List all projects in an organization
+```bash
+applad projects list --org acme-corp
+```
+
+### Switch to a project
+```bash
+applad projects switch mobile-app
+```
+
+### View current project details
+```bash
+applad projects info
+```
+
+### Clone a project for staging
+```bash
+applad projects clone mobile-app \
+  --name "Mobile App Staging"
+```
+
+### Delete a project
+```bash
+applad projects delete old-project
+```

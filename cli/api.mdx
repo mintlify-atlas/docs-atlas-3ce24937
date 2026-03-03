@@ -1,0 +1,56 @@
+---
+title: applad api
+description: Direct API access and management commands for interacting with the Applad API programmatically.
+---
+
+## Overview
+
+The `applad api` command provides direct access to the Applad API for programmatic interactions and advanced automation scenarios.
+
+<Note>
+This command is not documented in the current command specification. If you need to interact with the Applad API directly, please refer to the main API documentation or use the specialized commands for specific resources (tables, functions, deployments, etc.).
+</Note>
+
+## Alternative Approaches
+
+For most use cases, you should use the specialized resource commands instead:
+
+- **Organizations**: Use `applad orgs` - see [applad orgs](/cli/orgs)
+- **Projects**: Use `applad projects` - see [applad projects](/cli/projects)
+- **Database**: Use `applad db` for database operations
+- **Functions**: Use `applad functions` for function management
+- **Deployments**: Use `applad deploy` for deployment operations
+- **Config**: Use `applad config` for configuration management
+
+## Programmatic Access
+
+For programmatic API access, consider:
+
+1. Using the specialized CLI commands with JSON output flags (if available)
+2. Using deployment keys with scoped permissions for CI/CD pipelines
+3. Accessing the REST API endpoints directly from your applications
+4. Using the `applad instruct` command for AI-assisted operations
+
+## Examples
+
+### Using deployment keys for CI/CD
+
+```bash
+# Create a scoped deployment key for API access
+applad orgs keys create-deployment <org-id> \
+  --label "ci-pipeline" \
+  --scopes "deployments:run,functions:deploy"
+```
+
+### Using specialized commands
+
+```bash
+# List resources
+applad projects list
+applad functions list
+applad deploy list
+
+# Manage resources
+applad functions deploy my-function
+applad deploy run web
+```

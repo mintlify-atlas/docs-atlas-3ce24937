@@ -1,0 +1,424 @@
+---
+title: Messaging
+description: Unified messaging across email, SMS, push, in-app, Slack, Discord, and Teams with template management
+---
+
+## Overview
+
+Applad provides unified messaging across all channels — email, SMS, push notifications, in-app messages, Slack, Discord, and Teams. Configure providers in `messaging/messaging.yaml`, define templates in `messaging/templates/`, and send messages via the SDK or workflows.
+
+## Channel Configuration
+
+### Email
+
+```yaml messaging/messaging.yaml
+email:
+  enabled: true
+  provider: "resend"
+  config:
+    api_key: ${RESEND_API_KEY}
+    from: "hello@myapp.com"
+    from_name: "My App"
+    reply_to: "support@myapp.com"
+```
+
+Supported email providers:
+- **Resend** (recommended for dev/staging)
+- **AWS SES** (recommended for production)
+- **SendGrid**
+- **Mailgun**
+- **Postmark**
+- **SMTP** (generic)
+
+#### Environment-Specific Providers
+
+Use different providers for different environments:
+
+```yaml messaging/messaging.yaml
+email:
+  enabled: true
+  provider: "resend"
+  config:
+    api_key: ${RESEND_API_KEY}
+    from: "hello@myapp.com"
+    from_name: "My App"
+    reply_to: "support@myapp.com"
+
+  environment_overrides:
+    production:
+      provider: "ses"
+      config:
+        access_key: ${AWS_SES_ACCESS_KEY}
+        secret_key: ${AWS_SES_SECRET_KEY}
+        region: "eu-west-1"
+        from: "hello@myapp.com"
+```
+
+### SMS
+
+```yaml messaging/messaging.yaml
+sms:
+  enabled: true
+  provider: "twilio"
+  config:
+    account_sid: ${TWILIO_ACCOUNT_SID}
+    auth_token: ${TWILIO_AUTH_TOKEN}
+    from: ${TWILIO_FROM_NUMBER}  # Format: +12345678900
+```
+
+Supported SMS providers:
+- **Twilio**
+- **AWS SNS**
+- **Vonage**
+
+### Push Notifications
+
+```yaml messaging/messaging.yaml
+push:
+  enabled: true
+  providers:
+    - platform: "android"
+      provider: "fcm"
+      config:
+        service_account: ${FCM_SERVICE_ACCOUNT}  # Base64-encoded JSON
+
+    - platform: "ios"
+      provider: "apns"
+      config:
+        key_id: ${APNS_KEY_ID}
+        team_id: ${APNS_TEAM_ID}
+        private_key: ${APNS_PRIVATE_KEY}  # Base64-encoded .p8 file
+        environment: "production"  # production | sandbox
+```
+
+### In-App Messages
+
+```yaml messaging/messaging.yaml
+in_app:
+  enabled: true
+  persistence: true
+  max_age: "30d"
+  realtime_delivery: true
+```
+
+In-app messages are stored in the database and delivered via the realtime layer.
+
+### Slack Integration
+
+```yaml messaging/messaging.yaml
+integrations:
+  - name: "slack"
+    enabled: true
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    default_channel: "#alerts"
+```
+
+### Discord Integration
+
+```yaml messaging/messaging.yaml
+integrations:
+  - name: "discord"
+    enabled: false
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+```
+
+### Microsoft Teams Integration
+
+```yaml messaging/messaging.yaml
+integrations:
+  - name: "teams"
+    enabled: false
+    webhook_url: ${TEAMS_WEBHOOK_URL}
+```
+
+## Message Templates
+
+Templates define message content across all channels. Template skeletons live in `messaging/templates/*.yaml`. Actual content is managed through the admin UI for non-technical users to edit.
+
+### Template Structure
+
+```yaml messaging/templates/welcome.yaml
+key: "welcome"
+channels: ["email", "push", "in_app"]
+description: "Sent when a new user signs up"
+
+defaults:
+  email:
+    subject: "Welcome to My App"
+  push:
+    title: "Welcome!"
+    body: "Your account is ready."
+  in_app:
+    title: "Welcome to My App"
+    body: "Get started by completing your profile."
+```
+
+### Multi-Channel Template
+
+```yaml messaging/templates/payment-failed.yaml
+key: "payment-failed"
+channels: ["email", "push", "in_app", "sms", "slack"]
+description: "Payment failure notification"
+
+defaults:
+  email:
+    subject: "Action required: payment failed"
+  push:
+    title: "Payment failed"
+    body: "Tap to update your payment method."
+  in_app:
+    title: "Your payment failed"
+  sms:
+    body: "Your payment failed. Update your payment method at myapp.com"
+  slack:
+    text: "Payment failed for {{user.email}} — amount: {{payment.amount}}"
+```
+
+## Sending Messages
+
+### Via SDK
+
+```dart
+import 'package:applad/applad.dart';
+
+// Send email
+await applad.messaging.send(
+  template: 'welcome',
+  to: user.email,
+  data: {
+    'user_name': user.name,
+  },
+);
+
+// Send push notification
+await applad.messaging.sendPush(
+  template: 'payment-failed',
+  to: user.pushToken,
+  data: {
+    'amount': payment.amount,
+  },
+);
+
+// Send SMS
+await applad.messaging.sendSMS(
+  template: 'password-reset',
+  to: user.phone,
+  data: {
+    'code': resetCode,
+  },
+);
+
+// Send Slack message
+await applad.messaging.sendSlack(
+  template: 'new-user-alert',
+  data: {
+    'user_email': user.email,
+  },
+);
+```
+
+### Via Workflows
+
+Messages are often sent as part of workflows:
+
+```yaml workflows/user-onboarding.yaml
+name: "user-onboarding"
+trigger:
+  type: "event"
+  event: "auth.user.created"
+
+steps:
+  - name: "send-welcome-email"
+    type: "message"
+    channel: "email"
+    template: "welcome"
+
+  - name: "send-welcome-push"
+    type: "message"
+    channel: "push"
+    template: "welcome-push"
+    depends_on: ["send-welcome-email"]
+
+  - name: "notify-team-slack"
+    type: "message"
+    channel: "slack"
+    template: "new-user-alert"
+    depends_on: ["send-welcome-email"]
+```
+
+## Testing Messages
+
+Test each channel before going live:
+
+```bash
+# Test email
+applad messaging test email \
+  --to user@example.com \
+  --template welcome
+
+# Test SMS
+applad messaging test sms \
+  --to +1234567890 \
+  --template password-reset
+
+# Test push notification
+applad messaging test push \
+  --token <device-token> \
+  --template welcome
+
+# Test Slack
+applad messaging test slack \
+  --template new-user-alert
+```
+
+## Delivery Logs
+
+Track all messages sent across all channels:
+
+```bash
+# All messages
+applad messaging logs
+
+# Filter by channel
+applad messaging logs --channel email
+applad messaging logs --channel sms
+applad messaging logs --channel push
+
+# Filter by template
+applad messaging logs --template welcome
+```
+
+Shows every message sent, its channel, template, recipient, timestamp, and delivery status (delivered, bounced, failed).
+
+## Managing Templates
+
+### List templates
+
+```bash
+applad messaging templates list
+```
+
+Shows each template's key, supported channels, and default content.
+
+### Validate templates
+
+```bash
+applad messaging templates validate
+```
+
+Checks that all template references in YAML files have corresponding content entries in the admin database.
+
+## Channel Status
+
+```bash
+applad messaging channels list
+```
+
+Shows which channels are enabled, which providers are configured, and whether each channel is healthy.
+
+## Environment Variables
+
+Messaging configuration requires these environment variables:
+
+```bash .env
+# Email — Dev/Staging
+RESEND_API_KEY=  # [SECRET] applad secrets set RESEND_API_KEY
+
+# Email — Production
+AWS_SES_ACCESS_KEY=  # [SECRET] applad secrets set AWS_SES_ACCESS_KEY
+AWS_SES_SECRET_KEY=  # [SECRET] applad secrets set AWS_SES_SECRET_KEY
+
+# SMS
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=     # [SECRET] applad secrets set TWILIO_AUTH_TOKEN
+TWILIO_FROM_NUMBER=    # Format: +12345678900
+
+# Push — Android
+FCM_SERVICE_ACCOUNT=   # [SECRET] Base64-encoded service account JSON
+
+# Push — iOS
+APNS_KEY_ID=
+APNS_TEAM_ID=
+APNS_PRIVATE_KEY=      # [SECRET] Base64-encoded .p8 file
+
+# Integrations
+SLACK_WEBHOOK_URL=     # [SECRET] applad secrets set SLACK_WEBHOOK_URL
+DISCORD_WEBHOOK_URL=   # [SECRET] applad secrets set DISCORD_WEBHOOK_URL
+TEAMS_WEBHOOK_URL=     # [SECRET] applad secrets set TEAMS_WEBHOOK_URL
+```
+
+## Example: Complete Messaging Configuration
+
+```yaml messaging/messaging.yaml
+email:
+  enabled: true
+  provider: "resend"
+  config:
+    api_key: ${RESEND_API_KEY}
+    from: "hello@myapp.com"
+    from_name: "My App"
+    reply_to: "support@myapp.com"
+  environment_overrides:
+    production:
+      provider: "ses"
+      config:
+        access_key: ${AWS_SES_ACCESS_KEY}
+        secret_key: ${AWS_SES_SECRET_KEY}
+        region: "eu-west-1"
+        from: "hello@myapp.com"
+
+sms:
+  enabled: true
+  provider: "twilio"
+  config:
+    account_sid: ${TWILIO_ACCOUNT_SID}
+    auth_token: ${TWILIO_AUTH_TOKEN}
+    from: ${TWILIO_FROM_NUMBER}
+
+push:
+  enabled: true
+  providers:
+    - platform: "android"
+      provider: "fcm"
+      config:
+        service_account: ${FCM_SERVICE_ACCOUNT}
+
+    - platform: "ios"
+      provider: "apns"
+      config:
+        key_id: ${APNS_KEY_ID}
+        team_id: ${APNS_TEAM_ID}
+        private_key: ${APNS_PRIVATE_KEY}
+        environment: "production"
+
+in_app:
+  enabled: true
+  persistence: true
+  max_age: "30d"
+  realtime_delivery: true
+
+integrations:
+  - name: "slack"
+    enabled: true
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    default_channel: "#alerts"
+
+  - name: "discord"
+    enabled: false
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+
+  - name: "teams"
+    enabled: false
+    webhook_url: ${TEAMS_WEBHOOK_URL}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Assistant" icon="robot" href="/guides/ai-assistant">
+    Use "The Lad" to help manage infrastructure with natural language
+  </Card>
+  <Card title="Deployments" icon="rocket" href="/guides/deployments">
+    Configure deployment pipelines for your apps
+  </Card>
+</CardGroup>

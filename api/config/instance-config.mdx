@@ -1,0 +1,199 @@
+---
+title: InstanceConfig
+description: Root-level Applad instance configuration (applad.yaml)
+---
+
+## Overview
+
+`InstanceConfig` represents the root-level configuration for an Applad instance, typically stored in `applad.yaml`. This is the top level of the configuration hierarchy.
+
+## Class Definition
+
+```dart
+final class InstanceConfig {
+  const InstanceConfig({
+    required this.version,
+    this.ai,
+    this.observability,
+    this.enabledFeatures = const [],
+  });
+  
+  factory InstanceConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="version" type="String" required>
+  Configuration schema version (e.g., `"1"`)
+</ParamField>
+
+<ParamField path="ai" type="AiConfig?">
+  AI provider configuration for AI-powered features
+</ParamField>
+
+<ParamField path="observability" type="ObservabilityRef?">
+  Logging and tracing configuration
+</ParamField>
+
+<ParamField path="enabledFeatures" type="List<String>" default="[]">
+  List of enabled feature flags for the instance
+</ParamField>
+
+## AiConfig
+
+Configuration for AI providers:
+
+<ParamField path="provider" type="String" required>
+  AI provider name (e.g., `"openai"`, `"anthropic"`, `"google"`)
+</ParamField>
+
+<ParamField path="model" type="String?">
+  Specific model to use (e.g., `"gpt-4"`, `"claude-3-opus"`)
+</ParamField>
+
+<ParamField path="apiKeyRef" type="SecretRef?">
+  Reference to API key secret (e.g., `{{secrets.openai_key}}`)
+</ParamField>
+
+## ObservabilityRef
+
+Observability and monitoring settings:
+
+<ParamField path="logLevel" type="String?">
+  Logging level: `"debug"`, `"info"`, `"warn"`, `"error"`
+</ParamField>
+
+<ParamField path="tracing" type="bool?">
+  Enable distributed tracing
+</ParamField>
+
+## Usage
+
+### Basic Configuration
+
+```yaml
+# applad.yaml
+version: "1"
+features:
+  - auth
+  - database
+  - storage
+  - functions
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = InstanceConfig.fromMap(yamlData);
+print('Version: ${config.version}');
+print('Features: ${config.enabledFeatures}');
+```
+
+### With AI Configuration
+
+```yaml
+version: "1"
+ai:
+  provider: openai
+  model: gpt-4
+  api_key: "{{secrets.openai_key}}"
+features:
+  - ai_assist
+```
+
+```dart
+final config = InstanceConfig.fromMap(yamlData);
+
+if (config.ai != null) {
+  print('AI Provider: ${config.ai!.provider}');
+  print('Model: ${config.ai!.model}');
+  
+  if (config.ai!.apiKeyRef != null) {
+    print('API Key Secret: ${config.ai!.apiKeyRef!.key}');
+  }
+}
+```
+
+### With Observability
+
+```yaml
+version: "1"
+observability:
+  log_level: info
+  tracing: true
+```
+
+```dart
+final config = InstanceConfig.fromMap(yamlData);
+
+if (config.observability != null) {
+  print('Log Level: ${config.observability!.logLevel}');
+  print('Tracing Enabled: ${config.observability!.tracing}');
+}
+```
+
+### Feature Flags
+
+```yaml
+version: "1"
+features:
+  auth: true
+  database: true
+  storage: true
+  functions: false
+  realtime: true
+```
+
+```dart
+final config = InstanceConfig.fromMap(yamlData);
+
+// Check if feature is enabled
+final hasAuth = config.enabledFeatures.contains('auth');
+final hasFunctions = config.enabledFeatures.contains('functions');
+
+print('Auth enabled: $hasAuth');
+print('Functions enabled: $hasFunctions');
+```
+
+### Converting to JSON
+
+```dart
+final config = InstanceConfig(
+  version: '1',
+  ai: AiConfig(
+    provider: 'openai',
+    model: 'gpt-4',
+  ),
+  observability: ObservabilityRef(
+    logLevel: 'info',
+    tracing: true,
+  ),
+  enabledFeatures: ['auth', 'database', 'storage'],
+);
+
+final json = config.toJson();
+// {
+//   'version': '1',
+//   'ai': {'provider': 'openai', 'model': 'gpt-4', 'api_key': null},
+//   'observability': {'log_level': 'info', 'tracing': true},
+//   'features': ['auth', 'database', 'storage']
+// }
+```
+
+## Common Feature Flags
+
+- `auth` - Authentication and user management
+- `database` - Database access
+- `storage` - File storage
+- `functions` - Serverless functions
+- `realtime` - WebSocket real-time updates
+- `messaging` - Real-time messaging
+- `workflows` - Workflow automation
+- `analytics` - Analytics tracking
+- `ai_assist` - AI-powered features
+
+## Source Location
+
+`packages/applad_core/lib/src/config/instance_config.dart:6`

@@ -1,0 +1,324 @@
+---
+title: Config-Driven Infrastructure
+description: Understanding Applad's YAML config tree model and infrastructure-as-code approach
+---
+
+Applad treats configuration as the single source of truth for your entire backend. The YAML config tree is not just a representation of your infrastructure — it **is** your infrastructure.
+
+## The Core Principle
+
+Most teams experience a gap between their infrastructure tools:
+- The BaaS has one mental model
+- The IaC tool (like Terraform) has another
+- The CI/CD system has yet another
+- Feature flags are managed separately
+- Analytics live in a different platform
+
+These tools drift apart over time. Changes in one don't automatically reflect in others. You maintain separate mental models and skill sets for each.
+
+<Info>
+Applad collapses all of these into a single config tree. The config files **are** the backend. The admin UI is a lens into them. The AI is the lad that helps you work with both.
+</Info>
+
+Every click in the UI writes config. Every config change reflects in the UI. Every instruction you give to `applad instruct` produces real changes in your config files. There is no gap, no drift, no manual translation.
+
+## Directory Structure as UI
+
+The directory structure mirrors UI navigation exactly. This is not a coincidence — it's a fundamental design principle:
+
+```
+orgs/
+└── acme-corp/
+    ├── org.yaml
+    └── mobile-app/
+        ├── project.yaml
+        ├── database/
+        │   ├── database.yaml
+        │   ├── migrations/
+        │   │   ├── primary/
+        │   │   └── analytics/
+        │   └── tables/
+        │       ├── users.yaml
+        │       └── posts.yaml
+        ├── storage/
+        │   ├── storage.yaml
+        │   └── buckets/
+        │       ├── avatars.yaml
+        │       └── documents.yaml
+        ├── functions/
+        │   ├── send-welcome-message.yaml
+        │   └── process-payment.yaml
+        ├── messaging/
+        │   ├── messaging.yaml
+        │   └── templates/
+        │       ├── welcome.yaml
+        │       └── password-reset.yaml
+        ├── flags/
+        │   └── new-dashboard.yaml
+        └── deployments/
+            ├── web.yaml
+            ├── android-production.yaml
+            └── ios-production.yaml
+```
+
+<Note>
+`database/tables/users.yaml` is **Database > Tables > users** in the UI. Always.
+
+The path in the filesystem is the breadcrumb in the UI. They are the same thing.
+</Note>
+
+## Discovery via Marker Files
+
+Applad discovers organizations and projects by scanning for marker files:
+
+- `org.yaml` marks an organization directory
+- `project.yaml` marks a project directory
+
+No explicit listing anywhere. No `projects/` wrapper folder — one level shorter everywhere. Applad discovers everything by scanning for these marker files.
+
+## Config File Principles
+
+### Purely Declarative
+
+Applad's config files are and will always remain **purely declarative**. They describe what exists — schemas, adapters, pipelines, providers, rules. They do not describe logic.
+
+<Warning>
+Applad will never add templating syntax, conditional blocks, or loop constructs to `.yaml` config files. This is a hard line, never crossed.
+</Warning>
+
+If you need conditional behavior — send this message only if the user has a mobile device, run this migration only if this table exists, deploy to production only if tests pass — that is what functions, workflows, and CI/CD pipeline conditions are for.
+
+**Config describes structure. Code describes behavior.** These are different things and they live in different places.
+
+### One Focused File Per Resource
+
+Every resource gets its own file:
+
+- `database/tables/users.yaml` — one table
+- `storage/buckets/avatars.yaml` — one bucket
+- `functions/process-payment.yaml` — one function
+- `deployments/android-production.yaml` — one deployment pipeline
+
+Flat files, clear ownership, easy to review in PRs.
+
+### Security Lives Alongside What It Protects
+
+Permission rules are defined in the same file as the resource they protect:
+
+```yaml database/tables/users.yaml
+name: "users"
+fields:
+  - name: "email"
+    type: "string"
+    unique: true
+
+permissions:
+  - role: "owner"
+    actions: ["*"]
+  - role: "user"
+    actions: ["read"]
+    filter: "id == $user.id"
+```
+
+When you review a PR that changes the schema, you see the permission changes in the same diff. Security is never an afterthought.
+
+## Bidirectional Sync
+
+Every action in the admin UI immediately generates or updates the corresponding `.yaml` file. Every config file change reflects in the UI immediately.
+
+<Steps>
+  <Step title="Developer edits config">
+    A developer changes `database/tables/posts.yaml` to add a new field.
+  </Step>
+  <Step title="Applad reconciles">
+    Running `applad up` applies the change to the database.
+  </Step>
+  <Step title="UI reflects change">
+    The admin console immediately shows the new field.
+  </Step>
+  <Step title="Product manager uses UI">
+    A product manager creates a new feature flag in the UI.
+  </Step>
+  <Step title="Config file created">
+    A new file `flags/new-feature.yaml` is created automatically.
+  </Step>
+  <Step title="Committed to git">
+    The developer commits the new flag file to version control.
+  </Step>
+</Steps>
+
+No gap, no drift, no manual translation.
+
+## Environment Overrides
+
+Configurations can specify environment-specific overrides:
+
+```yaml database/database.yaml
+connections:
+  - id: "primary"
+    adapter: "postgres"
+    url: ${DATABASE_URL}
+
+environment_overrides:
+  development:
+    primary:
+      adapter: "sqlite"
+      path: "./data/dev.db"
+  staging:
+    primary:
+      url: ${STAGING_DATABASE_URL}
+```
+
+The same config file adapts to different environments. Local development uses SQLite. Staging and production use PostgreSQL. The application code never changes.
+
+## Variable References
+
+Config files contain `${VAR}` references, never actual secret values:
+
+```yaml messaging/messaging.yaml
+email:
+  provider: "resend"
+  config:
+    api_key: ${RESEND_API_KEY}
+    from: "hello@myapp.com"
+```
+
+Actual values live in:
+- **Local development** — `.env` file (never committed)
+- **Staging/Production** — admin database (encrypted at rest)
+- **External secret managers** — AWS Secrets Manager, HashiCorp Vault, etc.
+
+<Check>
+Secrets are never in config files. Config files contain only references.
+</Check>
+
+## Composable Configuration
+
+Applad supports a `shared/` directory at the instance level that any org or project can reference:
+
+```
+shared/
+├── roles/
+│   └── default-roles.yaml
+├── messaging/
+│   └── slack-integration.yaml
+└── functions/
+    └── utils/
+```
+
+A team might define a `postgres-primary` shared config block that includes standard connection settings, migration config, and baseline table permission rules — then reference it across multiple projects.
+
+<Tip>
+Compose config, don't copy it. If the same configuration block appears in more than one project, it belongs in `shared/`.
+</Tip>
+
+## Auto-Generated Documentation
+
+Applad automatically generates `.env.example` files from your config tree:
+
+```bash
+# ============================================================
+# .env.example — mobile-app project
+# Auto-generated by Applad. Do not edit manually.
+# ============================================================
+
+# ── DATABASE ─────────────────────────────────────────────────
+# Used by: database/database.yaml (primary connection)
+# Format: postgres://user:password@host:port/dbname
+DATABASE_URL=
+
+# ── STORAGE ──────────────────────────────────────────────────
+# Used by: storage/storage.yaml
+S3_ACCESS_KEY=                       # [SECRET] applad secrets set S3_ACCESS_KEY
+S3_SECRET_KEY=                       # [SECRET] applad secrets set S3_SECRET_KEY
+```
+
+Every `${VAR_NAME}` reference is extracted, annotated with:
+- What the variable is for
+- Which config file uses it
+- What format it expects
+- Whether it should go through `applad secrets set` in production
+
+## The Four-Way Separation
+
+Applad maintains a clean separation between four types of data:
+
+<CardGroup cols={2}>
+  <Card title="Config Files" icon="file-code">
+    Structural decisions requiring developer review: schemas, pipelines, rules, adapters, role definitions (intent only), SSH key scopes (hard ceilings), `${VAR}` references (never values)
+  </Card>
+  <Card title="Admin Database (Access Control)" icon="lock">
+    Managed via `applad access` only: actual role grants, project-level overrides, scope grants, environment-level apply grants, time-limited access, pending requests
+  </Card>
+  <Card title="Admin Database (Operational Data)" icon="database">
+    Feature flag targeting rules, messaging template content, signing certificates (encrypted), AI and cloud provider credentials (encrypted), secret values for non-local environments (encrypted)
+  </Card>
+  <Card title="Runtime Database" icon="server">
+    User records, application data, analytics, full audit log, deployment history, function logs, messaging send history, real-time state, storage metadata, security event logs
+  </Card>
+</CardGroup>
+
+<Warning>
+**Config files cannot be the enforcement layer for permissions that govern config files.** That's circular.
+
+Access controls live in the admin database. Editing a config file cannot change what anyone can do.
+</Warning>
+
+## Config Validation
+
+Before any changes are applied, Applad validates the entire config tree:
+
+1. **Syntax** — all YAML is well-formed
+2. **Schema** — every file matches the expected structure
+3. **Variables** — all `${VAR}` references are satisfied
+4. **Cross-references** — functions referenced in workflows exist, tables referenced in realtime channels exist
+5. **Cross-database relations** — flagged with actionable errors (must be resolved at application layer)
+
+```bash
+$ applad up --dry-run
+
+ERROR database/tables/users.yaml line 14
+  Relation field "org_id" references table "organisations" which does not exist.
+  Did you mean "organizations"? (found in database/tables/organizations.yaml)
+  Fix: change the table: value on line 14 to "organizations"
+```
+
+Validation failures prevent any changes from being applied. Nothing touches your infrastructure until the config is valid.
+
+## From Config to Reality
+
+When you run `applad up`, here's what happens:
+
+<Steps>
+  <Step title="Read and merge">
+    Applad reads the entire config tree and merges it (instance → org → project → environment)
+  </Step>
+  <Step title="Validate">
+    All references, cross-references, and constraints are validated
+  </Step>
+  <Step title="Synthesize Docker Compose">
+    A `docker-compose.yml` is generated from your config for the target environment
+  </Step>
+  <Step title="Compare state">
+    Desired state (from config) is compared against current state (from infrastructure)
+  </Step>
+  <Step title="Apply changes">
+    Only what has changed is updated — containers restarted, migrations run, configs reloaded
+  </Step>
+  <Step title="Record results">
+    A recap shows exactly what changed, attributed to your SSH key identity
+  </Step>
+</Steps>
+
+The config tree is the source of truth. `applad up` makes reality match it.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agentless Operation" icon="server" href="/concepts/agentless-operation">
+    Learn how Applad connects via SSH without persistent agents
+  </Card>
+  <Card title="Idempotency" icon="rotate" href="/concepts/idempotency">
+    Understand how running `applad up` twice is the same as once
+  </Card>
+</CardGroup>

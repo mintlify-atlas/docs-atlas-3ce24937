@@ -1,0 +1,293 @@
+---
+title: FunctionConfig
+description: Serverless function configuration (functions/*/function.yaml)
+---
+
+## Overview
+
+`FunctionConfig` defines serverless function settings including runtime, triggers, resources, and environment variables. Each function has a `function.yaml` configuration file.
+
+## Class Definition
+
+```dart
+final class FunctionConfig {
+  const FunctionConfig({
+    required this.name,
+    this.runtime = 'dart',
+    this.trigger = FunctionTrigger.http,
+    this.memory = 128,
+    this.timeoutSeconds = 30,
+    this.environment = const {},
+    this.schedule,
+    this.source,
+  });
+  
+  factory FunctionConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="name" type="String" required>
+  Function name/identifier
+</ParamField>
+
+<ParamField path="runtime" type="String" default="dart">
+  Runtime environment: `"dart"`, `"node"`, `"python"`, `"go"`
+</ParamField>
+
+<ParamField path="trigger" type="FunctionTrigger" default="FunctionTrigger.http">
+  Function trigger type: `http`, `schedule`, `event`, or `webhook`
+</ParamField>
+
+<ParamField path="memory" type="int" default="128">
+  Memory allocation in megabytes
+</ParamField>
+
+<ParamField path="timeoutSeconds" type="int" default="30">
+  Maximum execution time in seconds
+</ParamField>
+
+<ParamField path="environment" type="Map<String, String>" default="{}">
+  Environment variables for the function
+</ParamField>
+
+<ParamField path="schedule" type="String?">
+  Cron expression for scheduled functions (only for `schedule` trigger)
+</ParamField>
+
+<ParamField path="source" type="SourceBlock?">
+  Source code configuration (git repo, local path, etc.)
+</ParamField>
+
+## FunctionTrigger Enum
+
+```dart
+enum FunctionTrigger {
+  http,      // HTTP endpoint
+  schedule,  // Cron schedule
+  event,     // Database/storage event
+  webhook;   // External webhook
+}
+```
+
+## Usage
+
+### HTTP Function
+
+```yaml
+# functions/send-email/function.yaml
+name: send-email
+runtime: dart
+trigger: http
+memory: 256
+timeout_seconds: 60
+
+environment:
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  SMTP_USER: "{{secrets.smtp_user}}"
+  SMTP_PASS: "{{secrets.smtp_pass}}"
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = FunctionConfig.fromMap(yamlData);
+print('Function: ${config.name}');
+print('Runtime: ${config.runtime}');
+print('Trigger: ${config.trigger.name}');
+print('Memory: ${config.memory} MB');
+print('Timeout: ${config.timeoutSeconds}s');
+
+config.environment.forEach((key, value) {
+  print('  $key: $value');
+});
+```
+
+### Scheduled Function
+
+```yaml
+name: daily-cleanup
+runtime: dart
+trigger: schedule
+schedule: "0 2 * * *"  # 2 AM daily
+memory: 512
+timeout_seconds: 300
+
+environment:
+  RETENTION_DAYS: "30"
+```
+
+```dart
+final config = FunctionConfig.fromMap(yamlData);
+
+if (config.trigger == FunctionTrigger.schedule) {
+  print('Schedule: ${config.schedule}');
+}
+```
+
+### Event-Triggered Function
+
+```yaml
+name: on-user-signup
+runtime: dart
+trigger: event
+memory: 128
+timeout_seconds: 30
+
+environment:
+  WELCOME_EMAIL_TEMPLATE: welcome
+```
+
+### Webhook Function
+
+```yaml
+name: stripe-webhook
+runtime: dart
+trigger: webhook
+memory: 256
+timeout_seconds: 45
+
+environment:
+  STRIPE_SECRET: "{{secrets.stripe_secret}}"
+  STRIPE_WEBHOOK_SECRET: "{{secrets.stripe_webhook_secret}}"
+```
+
+### With Custom Source
+
+```yaml
+name: custom-function
+runtime: dart
+trigger: http
+
+source:
+  type: git
+  url: https://github.com/myorg/functions.git
+  path: send-email
+  branch: main
+```
+
+### Image Processing Function
+
+```yaml
+name: process-image
+runtime: dart
+trigger: event
+memory: 1024  # Need more memory for image processing
+timeout_seconds: 120
+
+environment:
+  MAX_IMAGE_WIDTH: "2048"
+  MAX_IMAGE_HEIGHT: "2048"
+  QUALITY: "85"
+```
+
+### Data Processing Function
+
+```yaml
+name: generate-report
+runtime: dart
+trigger: schedule
+schedule: "0 0 * * 0"  # Weekly on Sunday at midnight
+memory: 512
+timeout_seconds: 600  # 10 minutes
+
+environment:
+  DATABASE_URL: "{{secrets.analytics_db_url}}"
+  REPORT_BUCKET: reports
+```
+
+### API Integration Function
+
+```yaml
+name: sync-external-api
+runtime: dart
+trigger: schedule
+schedule: "*/15 * * * *"  # Every 15 minutes
+memory: 256
+timeout_seconds: 90
+
+environment:
+  API_ENDPOINT: https://api.external.com
+  API_KEY: "{{secrets.external_api_key}}"
+  BATCH_SIZE: "100"
+```
+
+### Creating Programmatically
+
+```dart
+final config = FunctionConfig(
+  name: 'process-payment',
+  runtime: 'dart',
+  trigger: FunctionTrigger.http,
+  memory: 256,
+  timeoutSeconds: 60,
+  environment: {
+    'STRIPE_KEY': '{{secrets.stripe_key}}',
+    'CURRENCY': 'USD',
+  },
+);
+
+final json = config.toJson();
+```
+
+## Cron Schedule Examples
+
+```yaml
+# Every minute
+schedule: "* * * * *"
+
+# Every 5 minutes
+schedule: "*/5 * * * *"
+
+# Every hour at minute 0
+schedule: "0 * * * *"
+
+# Every day at 2:30 AM
+schedule: "30 2 * * *"
+
+# Every Monday at 9:00 AM
+schedule: "0 9 * * 1"
+
+# First day of every month at midnight
+schedule: "0 0 1 * *"
+
+# Every weekday at 6:00 PM
+schedule: "0 18 * * 1-5"
+```
+
+## Memory Recommendations
+
+- **128 MB** - Simple HTTP endpoints, webhooks
+- **256 MB** - Email sending, API calls, light data processing
+- **512 MB** - Database operations, file processing
+- **1024 MB** - Image/video processing, heavy computations
+- **2048+ MB** - Large dataset processing, ML inference
+
+## Timeout Recommendations
+
+- **30s** - Quick HTTP responses
+- **60s** - Email sending, external API calls
+- **120s** - File processing, database queries
+- **300s** - Report generation, batch processing
+- **600s+** - Large data migrations, complex computations
+
+## Function Triggers
+
+- **http** - Invoked via HTTP POST request
+- **schedule** - Invoked on cron schedule
+- **event** - Triggered by database/storage events
+- **webhook** - External webhook handler
+
+## Supported Runtimes
+
+- `dart` - Dart runtime (default for Applad)
+- `node` - Node.js runtime
+- `python` - Python runtime
+- `go` - Go runtime
+
+## Source Location
+
+`packages/applad_core/lib/src/config/function_config.dart:7`

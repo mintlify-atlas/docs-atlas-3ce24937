@@ -1,0 +1,301 @@
+---
+title: AuthConfig
+description: Authentication configuration (auth/auth.yaml)
+---
+
+## Overview
+
+`AuthConfig` defines authentication providers, session settings, and security policies. Configuration is typically stored in `auth/auth.yaml`.
+
+## Class Definition
+
+```dart
+final class AuthConfig {
+  const AuthConfig({
+    this.providers = const [],
+    this.mfa,
+    this.sso,
+    this.sessionDurationSeconds = 86400,
+    this.rbac,
+    this.multiTenancy,
+  });
+  
+  factory AuthConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="providers" type="List<AuthProvider>" default="[]">
+  List of enabled authentication providers
+</ParamField>
+
+<ParamField path="mfa" type="MfaConfig?">
+  Multi-factor authentication configuration
+</ParamField>
+
+<ParamField path="sso" type="SsoConfig?">
+  Single sign-on configuration
+</ParamField>
+
+<ParamField path="sessionDurationSeconds" type="int" default="86400">
+  Session duration in seconds (default: 24 hours)
+</ParamField>
+
+<ParamField path="rbac" type="RbacConfig?">
+  Role-based access control configuration
+</ParamField>
+
+<ParamField path="multiTenancy" type="MultiTenancyConfig?">
+  Multi-tenancy configuration
+</ParamField>
+
+## AuthProvider
+
+<ParamField path="type" type="String" required>
+  Provider type: `"email"`, `"google"`, `"github"`, `"apple"`, `"microsoft"`, etc.
+</ParamField>
+
+<ParamField path="clientId" type="String?">
+  OAuth client ID (for OAuth providers)
+</ParamField>
+
+<ParamField path="enabled" type="bool" default="true">
+  Whether this provider is enabled
+</ParamField>
+
+## MfaConfig
+
+<ParamField path="required" type="bool" default="false">
+  Whether MFA is required for all users
+</ParamField>
+
+<ParamField path="methods" type="List<String>" default="['totp']">
+  Allowed MFA methods: `"totp"`, `"sms"`, `"email"`
+</ParamField>
+
+## SsoConfig
+
+<ParamField path="provider" type="String" required>
+  SSO provider: `"okta"`, `"auth0"`, `"azure_ad"`, `"google_workspace"`
+</ParamField>
+
+<ParamField path="domain" type="String?">
+  Domain restriction for SSO
+</ParamField>
+
+<ParamField path="required" type="bool" default="false">
+  Whether SSO is required for this domain
+</ParamField>
+
+## RbacConfig
+
+<ParamField path="rolesFile" type="String?">
+  Path to roles definition file
+</ParamField>
+
+<ParamField path="defaultRole" type="String" default="user">
+  Default role for new users
+</ParamField>
+
+## MultiTenancyConfig
+
+<ParamField path="model" type="MultiTenancyModel" required>
+  Tenancy isolation model: `row`, `schema`, or `database`
+</ParamField>
+
+<ParamField path="tenantField" type="String" default="org_id">
+  Field name for tenant identifier
+</ParamField>
+
+## Usage
+
+### Email + OAuth Providers
+
+```yaml
+# auth/auth.yaml
+providers:
+  - type: email
+    enabled: true
+  - type: google
+    client_id: "{{secrets.google_client_id}}"
+    enabled: true
+  - type: github
+    client_id: "{{secrets.github_client_id}}"
+    enabled: true
+
+session_duration_seconds: 604800  # 7 days
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = AuthConfig.fromMap(yamlData);
+
+print('Session duration: ${config.sessionDurationSeconds ~/ 3600} hours');
+print('Providers:');
+for (final provider in config.providers) {
+  print('  ${provider.type}: ${provider.enabled ? "enabled" : "disabled"}');
+}
+```
+
+### With Multi-Factor Authentication
+
+```yaml
+providers:
+  - type: email
+
+mfa:
+  required: true
+  methods:
+    - totp
+    - sms
+```
+
+```dart
+final config = AuthConfig.fromMap(yamlData);
+
+if (config.mfa != null) {
+  print('MFA required: ${config.mfa!.required}');
+  print('MFA methods: ${config.mfa!.methods.join(", ")}');
+}
+```
+
+### With Single Sign-On
+
+```yaml
+providers:
+  - type: email
+
+sso:
+  provider: okta
+  domain: company.com
+  required: true
+```
+
+```dart
+final config = AuthConfig.fromMap(yamlData);
+
+if (config.sso != null) {
+  print('SSO provider: ${config.sso!.provider}');
+  if (config.sso!.domain != null) {
+    print('SSO domain: ${config.sso!.domain}');
+  }
+  print('SSO required: ${config.sso!.required}');
+}
+```
+
+### With RBAC
+
+```yaml
+providers:
+  - type: email
+
+rbac:
+  roles_file: auth/roles.yaml
+  default_role: user
+```
+
+```dart
+final config = AuthConfig.fromMap(yamlData);
+
+if (config.rbac != null) {
+  print('Roles file: ${config.rbac!.rolesFile}');
+  print('Default role: ${config.rbac!.defaultRole}');
+}
+```
+
+### With Multi-Tenancy
+
+```yaml
+providers:
+  - type: email
+
+multi_tenancy:
+  model: row
+  tenant_field: org_id
+```
+
+```dart
+final config = AuthConfig.fromMap(yamlData);
+
+if (config.multiTenancy != null) {
+  print('Tenancy model: ${config.multiTenancy!.model.name}');
+  print('Tenant field: ${config.multiTenancy!.tenantField}');
+}
+```
+
+### Multi-Tenancy Models
+
+```dart
+enum MultiTenancyModel {
+  row,      // Row-level isolation (org_id in each row)
+  schema,   // Schema-level isolation (separate schema per tenant)
+  database; // Database-level isolation (separate DB per tenant)
+}
+
+// Row-level: Best for SaaS with many small tenants
+MultiTenancyConfig(
+  model: MultiTenancyModel.row,
+  tenantField: 'org_id',
+);
+
+// Schema-level: Medium isolation, good for compliance
+MultiTenancyConfig(
+  model: MultiTenancyModel.schema,
+  tenantField: 'tenant_id',
+);
+
+// Database-level: Maximum isolation, for large enterprise clients
+MultiTenancyConfig(
+  model: MultiTenancyModel.database,
+  tenantField: 'client_id',
+);
+```
+
+### Complete Enterprise Configuration
+
+```yaml
+providers:
+  - type: email
+  - type: google
+    client_id: "{{secrets.google_client_id}}"
+  - type: microsoft
+    client_id: "{{secrets.microsoft_client_id}}"
+
+mfa:
+  required: true
+  methods:
+    - totp
+
+sso:
+  provider: okta
+  domain: enterprise.com
+  required: true
+
+session_duration_seconds: 28800  # 8 hours
+
+rbac:
+  roles_file: auth/roles.yaml
+  default_role: viewer
+
+multi_tenancy:
+  model: schema
+  tenant_field: org_id
+```
+
+## Common OAuth Providers
+
+- `email` - Email/password authentication
+- `google` - Google OAuth
+- `github` - GitHub OAuth
+- `apple` - Sign in with Apple
+- `microsoft` - Microsoft OAuth
+- `facebook` - Facebook Login
+- `twitter` - Twitter OAuth
+- `linkedin` - LinkedIn OAuth
+
+## Source Location
+
+`packages/applad_core/lib/src/config/auth_config.dart:4`

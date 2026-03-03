@@ -1,0 +1,223 @@
+---
+title: OrgConfig
+description: Organization-level configuration (org.yaml)
+---
+
+## Overview
+
+`OrgConfig` represents organization-level settings, typically stored in `org.yaml`. Organizations group multiple projects and manage team members and infrastructure.
+
+## Class Definition
+
+```dart
+final class OrgConfig {
+  const OrgConfig({
+    required this.id,
+    required this.name,
+    this.members = const [],
+    this.infrastructureTargets = const [],
+  });
+  
+  factory OrgConfig.fromMap(Map<String, dynamic> map);
+  Map<String, dynamic> toJson();
+}
+```
+
+## Properties
+
+<ParamField path="id" type="String" required>
+  Unique organization identifier
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Organization display name
+</ParamField>
+
+<ParamField path="members" type="List<OrgMember>" default="[]">
+  List of organization members and their roles
+</ParamField>
+
+<ParamField path="infrastructureTargets" type="List<String>" default="[]">
+  Available infrastructure deployment targets
+</ParamField>
+
+## OrgMember
+
+Represents a member of the organization:
+
+<ParamField path="email" type="String" required>
+  Member's email address
+</ParamField>
+
+<ParamField path="role" type="String" default="member">
+  Member's role: `"owner"`, `"admin"`, `"developer"`, `"member"`, `"viewer"`
+</ParamField>
+
+## Usage
+
+### Basic Configuration
+
+```yaml
+# org.yaml
+id: acme-corp
+name: ACME Corporation
+members:
+  - email: alice@acme.com
+    role: owner
+  - email: bob@acme.com
+    role: admin
+  - email: charlie@acme.com
+    role: developer
+```
+
+```dart
+import 'package:applad_core/applad_core.dart';
+
+final config = OrgConfig.fromMap(yamlData);
+print('Organization: ${config.name} (${config.id})');
+print('Members: ${config.members.length}');
+
+for (final member in config.members) {
+  print('${member.email} - ${member.role}');
+}
+```
+
+### With Infrastructure Targets
+
+```yaml
+id: acme-corp
+name: ACME Corporation
+infrastructure_targets:
+  - fly
+  - railway
+  - aws
+  - custom-server
+members:
+  - email: alice@acme.com
+    role: owner
+```
+
+```dart
+final config = OrgConfig.fromMap(yamlData);
+
+print('Available deployment targets:');
+for (final target in config.infrastructureTargets) {
+  print('  - $target');
+}
+```
+
+### Managing Members
+
+```dart
+final config = OrgConfig.fromMap(yamlData);
+
+// Find owners
+final owners = config.members
+  .where((m) => m.role == 'owner')
+  .toList();
+
+print('Organization owners:');
+for (final owner in owners) {
+  print('  ${owner.email}');
+}
+
+// Check if user is admin or owner
+bool hasAdminAccess(String email) {
+  final member = config.members
+    .firstWhere(
+      (m) => m.email == email,
+      orElse: () => OrgMember(email: '', role: 'none'),
+    );
+  
+  return member.role == 'owner' || member.role == 'admin';
+}
+```
+
+### Creating Programmatically
+
+```dart
+final config = OrgConfig(
+  id: 'startup-inc',
+  name: 'Startup Inc.',
+  members: [
+    OrgMember(email: 'founder@startup.com', role: 'owner'),
+    OrgMember(email: 'dev1@startup.com', role: 'developer'),
+    OrgMember(email: 'dev2@startup.com', role: 'developer'),
+  ],
+  infrastructureTargets: ['fly', 'railway'],
+);
+
+final json = config.toJson();
+```
+
+### Member Roles
+
+Role hierarchy and permissions:
+
+- **owner** - Full control, billing access, can delete org
+- **admin** - Manage members, projects, and settings
+- **developer** - Create/deploy projects, manage resources
+- **member** - View projects, limited modification
+- **viewer** - Read-only access
+
+```dart
+final rolePermissions = {
+  'owner': ['all'],
+  'admin': ['manage_members', 'manage_projects', 'deploy'],
+  'developer': ['create_projects', 'deploy', 'manage_resources'],
+  'member': ['view_projects', 'edit_own'],
+  'viewer': ['view_only'],
+};
+
+bool canDeploy(OrgMember member) {
+  return ['owner', 'admin', 'developer'].contains(member.role);
+}
+```
+
+## Common Patterns
+
+### Team Structure
+
+```yaml
+id: tech-company
+name: Tech Company
+members:
+  # Leadership
+  - email: cto@company.com
+    role: owner
+  
+  # Engineering managers
+  - email: eng-manager@company.com
+    role: admin
+  
+  # Developers
+  - email: dev1@company.com
+    role: developer
+  - email: dev2@company.com
+    role: developer
+  - email: dev3@company.com
+    role: developer
+  
+  # QA and support
+  - email: qa@company.com
+    role: member
+  - email: support@company.com
+    role: viewer
+```
+
+### Multi-Cloud Setup
+
+```yaml
+id: enterprise
+name: Enterprise Corp
+infrastructure_targets:
+  - aws-production
+  - aws-staging
+  - gcp-analytics
+  - azure-backup
+  - fly-preview
+```
+
+## Source Location
+
+`packages/applad_core/lib/src/config/org_config.dart:4`

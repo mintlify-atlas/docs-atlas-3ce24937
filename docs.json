@@ -1,122 +1,169 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Applad",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7C3AED",
+    "light": "#A78BFA",
+    "dark": "#5B21B6"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/mittolabs/applad"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mittolabs/applad"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/config-driven",
+              "concepts/agentless-operation",
+              "concepts/environments",
+              "concepts/idempotency"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Configuration",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "config/overview",
+              "config/instance",
+              "config/organizations",
+              "config/projects",
+              "config/environments"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Guides",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/project-setup",
+              "guides/database-schema",
+              "guides/authentication",
+              "guides/storage",
+              "guides/functions",
+              "guides/deployments",
+              "guides/feature-flags",
+              "guides/messaging",
+              "guides/ai-assistant"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/local",
+              "deployment/vps",
+              "deployment/cloud-adapters",
+              "deployment/docker-compose"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "CLI Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Commands",
             "pages": [
-              "api-reference/introduction"
+              "cli/init",
+              "cli/up",
+              "cli/down",
+              "cli/status"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Infrastructure",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "cli/deploy",
+              "cli/config",
+              "cli/env"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "cli/tables",
+              "cli/functions",
+              "cli/storage",
+              "cli/flags",
+              "cli/messaging"
+            ]
+          },
+          {
+            "group": "Access & Security",
+            "pages": [
+              "cli/auth",
+              "cli/access",
+              "cli/secrets"
+            ]
+          },
+          {
+            "group": "AI & Automation",
+            "pages": [
+              "cli/instruct",
+              "cli/workflows"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "cli/orgs",
+              "cli/projects",
+              "cli/api"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Packages",
+            "pages": [
+              "api/applad-core",
+              "api/applad-cli",
+              "api/applad-server"
+            ]
+          },
+          {
+            "group": "Client SDKs",
+            "pages": [
+              "api/applad-client",
+              "api/applad-function"
+            ]
+          },
+          {
+            "group": "Configuration Models",
+            "pages": [
+              "api/config/instance-config",
+              "api/config/org-config",
+              "api/config/project-config",
+              "api/config/auth-config",
+              "api/config/database-config",
+              "api/config/storage-config",
+              "api/config/function-config",
+              "api/config/deployment-config"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }
